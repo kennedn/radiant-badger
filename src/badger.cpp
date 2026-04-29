@@ -69,7 +69,7 @@ void ntp_callback(datetime_t *datetime, void *arg) {
     ntp_time_set = true;
 }
 
-void restful_callback(char *value, int status_code, void *arg) {
+void restful_callback(void *result, int status_code, void *arg) {
     if (arg == NULL) {
         return;
     }
@@ -78,32 +78,47 @@ void restful_callback(char *value, int status_code, void *arg) {
 
     TILE *tile = (TILE *)request->tile;
 
-    if (status_code != 200) {
-        draw_tiles(tile->name, image_indicator_question);
-    } else if (status_code == 200 && !value) {
-        draw_tiles(tile->name, image_indicator_tick);
-    }
+    DEBUG_PRINTF("restful_callback: status_code=%d, caller=%s, tile_type=%u\n", status_code, tile->name, tile->type);
 
-    DEBUG_PRINTF("restful_callback: value=%s, status_code=%d, caller=%s\n", value ? value : "NULL", status_code, tile->name);
-    if (value && !strcmp(request->status_request->on_value, value)) {
-        draw_tiles(tile->name, image_indicator_tick);
-        // piezo_play(piezo_notes_pong, piezo_notes_pong_len);
-    } else if(value && !strcmp(request->status_request->off_value, value)) {
-        draw_tiles(tile->name, image_indicator_cross);
-        // piezo_play(piezo_notes_pong_2, piezo_notes_pong_2_len);
-    } else if(value) {
+    if (status_code != 200) {
+        if (tile->display_value) {
+            free(tile->display_value);
+            tile->display_value = NULL;
+        }
         draw_tiles(tile->name, image_indicator_question);
+    } else if (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR) {
+        if (result) {
+            HTTP_TEMPERATURE_RESULT *temp_result = (HTTP_TEMPERATURE_RESULT *)result;
+            char display[70];
+            float current = strtof(temp_result->current, NULL) / 10.0f;
+            float target = strtof(temp_result->target, NULL) / 10.0f;
+            snprintf(display, sizeof(display), "%.1f/%.1f", current, target);
+            
+            if (display[0] != '\0') {
+                free(tile->display_value);
+                tile->display_value = (char *)malloc(strlen(display) + 1);
+                strcpy(tile->display_value, display);
+                draw_tiles(tile->name, image_indicator_tick);
+            } else {
+                draw_tiles(tile->name, image_indicator_question);
+            }
+        } else {
+            draw_tiles(tile->name, image_indicator_question);
+        }
+    } else {
+        draw_tiles(tile->name, image_indicator_tick);
     }
+    
     restful_free_request(request);
     draw_status_bar();
-    if (initialised) {
-        badger.uc8151->set_update_speed(3);
-    }
+    // if (initialised) {
+    // badger.uc8151->set_update_speed(3);
+    // }
 
     badger.update();
     badger.uc8151->busy_wait();
     initialised = true;
-    badger.uc8151->set_update_speed(2);
+    // badger.uc8151->set_update_speed(2);
 }
 
 int64_t halt_timeout_callback(alarm_id_t id, void *arg) {
@@ -286,11 +301,13 @@ void draw_status_bar(const char *message) {
 void draw_tiles(const char *name, const char *indicator_icon) {
     char tiles_base_idx = tiles_get_base_idx();
     char tile_pad_x = WIDTH / 3;
-    char tile_pad_y = 26;
+    char tile_pad_y = 18;
     char tile_offset = 18;
     char column_pad_y = 10;
     char indicator_offset = 44;
-    char text_offset = 10;
+    char text_offset = 20;
+    badger.graphics->set_pen(15);
+    badger.graphics->clear();
     for(char i=0; i< 3; i++) {
         if (!tiles_idx_in_bounds(tiles_base_idx + i)) {
             break;
@@ -302,37 +319,44 @@ void draw_tiles(const char *name, const char *indicator_icon) {
         badger.image((const uint8_t *)tile->image, Rect(tile_offset + (tile_pad_x*i), tile_pad_y, image_tile_size, image_tile_size));
         badger.graphics->set_pen(0);
 
+        // Use display_value if set, otherwise use name
+        // const char *display_text = (tile->display_value && tile->display_value[0]) ? tile->display_value : tile->name;
 
         // Determine the true width of the string if a wrap point exists
+        // int32_t name_size = badger.graphics->measure_text(display_text, 2.0f);
+        // int32_t prev_name_size = name_size;
+        // if (name_size > tile_pad_x) {
+        //     char *space_ptr = (char *)display_text;
+        //     char has_wrap = false;
+        //     while (true) {
+        //         space_ptr = strchr(space_ptr, ' ');
+        //         if (space_ptr == NULL) {
+        //             break;
+        //         }
+        //         has_wrap = true;
+        //         *space_ptr = '\0';
+        //         name_size = badger.graphics->measure_text(display_text, 2.0f);
+        //         *space_ptr = ' ';
+        //         space_ptr++;    // Move past space character for next iteration
+        //         if (name_size > tile_pad_x) {
+        //             name_size = prev_name_size;
+        //             break;
+        //         }
+        //         prev_name_size = name_size;
+        //     }
+
+        //     if (has_wrap) {
+        //         text_offset = 4;    // Correct y offset for multiple lines
+        //     }
+        // }
         int32_t name_size = badger.graphics->measure_text(tile->name, 2.0f);
-        int32_t prev_name_size = name_size;
-        if (name_size > tile_pad_x) {
-            char *space_ptr = tile->name;
-            char has_wrap = false;
-            while (true) {
-                space_ptr = strchr(space_ptr, ' ');
-                if (space_ptr == NULL) {
-                    break;
-                }
-                has_wrap = true;
-                *space_ptr = '\0';
-                name_size = badger.graphics->measure_text(tile->name, 2.0f);
-                *space_ptr = ' ';
-                space_ptr++;    // Move past space character for next iteration
-                if (name_size > tile_pad_x) {
-                    name_size = prev_name_size;
-                    break;
-                }
-                prev_name_size = name_size;
-            }
-
-            if (has_wrap) {
-                text_offset = 4;    // Correct y offset for multiple lines
-            }
-        }
         int32_t name_x_offset = (tile_pad_x - name_size) /2 ;
-
-        badger.graphics->text(tile->name, Point((tile_pad_x*i) + name_x_offset, tile_pad_y + image_tile_size + text_offset), tile_pad_x, 2);
+        badger.graphics->text(tile->name, Point((tile_pad_x*i) + name_x_offset, tile_pad_y + image_tile_size), tile_pad_x, 2);
+        if (tile->display_value && tile->display_value[0]) {
+            name_size = badger.graphics->measure_text(tile->display_value, 2.0f);
+            name_x_offset = (tile_pad_x - name_size) /2 ;
+            badger.graphics->text(tile->display_value, Point((tile_pad_x*i) + name_x_offset, tile_pad_y + image_tile_size + text_offset), tile_pad_x, 2);
+        }
         if(!strcmp(name, tile->name)) {
             badger.image((const uint8_t *)indicator_icon, 
                 Rect(tile_offset + (tile_pad_x*i) + indicator_offset, tile_pad_y + indicator_offset, image_indicator_size, image_indicator_size));

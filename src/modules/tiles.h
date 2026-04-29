@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #include "restful.h"
 
 typedef struct HEADING_ {
@@ -12,7 +14,14 @@ typedef struct TILE_ {
     char *image;
     void *action_request;
     void *status_request;
+    uint8_t type;
+    char *display_value;
 } TILE;
+
+enum TILE_TYPE {
+    TILE_TYPE_BOILER = 0,
+    TILE_TYPE_RADIATOR = 1,
+};
 
 typedef struct TILES_ {
     char *base_url;

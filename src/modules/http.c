@@ -50,17 +50,48 @@ typedef struct TCP_CLIENT_T_ {
     const char *method;
     const char *endpoint;
     const char *json_body;
-    const char *key;
+    HTTP_REQUEST_TYPE request_type;
+    HTTP_TEMPERATURE_RESULT temperature_result;
     http_callback_t callback;
     void *arg;
 } TCP_CLIENT_T;
 
+static bool http_extract_simple_value(const char *message_body, const char *key, char *value, int value_len) {
+    if (!message_body || !key || !value || value_len <= 0) {
+        return false;
+    }
+
+    char search_key[64];
+    snprintf(search_key, sizeof(search_key), "\"%s\":", key);
+
+    char *token = strstr(message_body, search_key);
+    if (!token) {
+        return false;
+    }
+
+    token += strlen(search_key);
+    int out = 0;
+    while (*token && out < value_len - 1) {
+        if (*token == '"') {
+            token++;
+            continue;
+        }
+        if (*token == ',' || *token == '}' || *token == ']') {
+            break;
+        }
+        value[out++] = *token++;
+    }
+    value[out] = '\0';
+    return out > 0;
+}
+
 /*!
- * \brief Extract HTTP response code and optionally scrape the JSON body for a key/value pair
+ * \brief Extract HTTP response code and optionally scrape the JSON body for temperature data
  * \param arg TCP server state struct
  */
 static void http_process_buffer(void *arg) {
     TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
+    memset(&state->temperature_result, 0, sizeof(state->temperature_result));
 
     // Process HTTP response body, example: "HTTP/1.1 200 OK\r\n"
     char *message_body = strstr((char *)state->buffer, " ");
@@ -72,8 +103,8 @@ static void http_process_buffer(void *arg) {
     // Move past deliminater and convert to number
     int response_code = atoi(++message_body);
 
-    // Key wasn't provided by user, so exit early
-    if (!state->key) {
+    // For non-temperature request types, just return the response code
+    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR) {
         state->callback(NULL, response_code, state->arg);
         return;
     }
@@ -93,40 +124,15 @@ static void http_process_buffer(void *arg) {
     message_body++;
     DEBUG_PRINTF("http_message_body_parse message_body: %s\n", message_body);
 
-    // Simple JSON key/value extractor, essentially just grep the json string for our value based on the user provided key and do a bit of cleanup
-
-    char key[20];
-    char *token;
-    char value[20];
-    char *value_ptr = value;
-    // Build substring search and get a pointer to the first occurrence of the search
-    sprintf(key, "\"%s\":", state->key);
-    token = strstr(message_body, key);
-    // Key not found in JSON, exit early
-    if (token == NULL) {
+    // Extract current and target values
+    if (!http_extract_simple_value(message_body, "current", state->temperature_result.current, sizeof(state->temperature_result.current)) ||
+        !http_extract_simple_value(message_body, "target", state->temperature_result.target, sizeof(state->temperature_result.target))) {
         state->callback(NULL, response_code, state->arg);
         return;
     }
-    // Seek past the found string
-    token += strlen(key);
 
-    // Cleanup and extract value
-    for (int i = 0; token[i]; i++) {
-        if (token[i] == '"') {
-            continue;
-        }
-        if (token[i] == ',' || token[i] == '}') {
-            break;
-        }
-        *value_ptr++ = token[i];
-    }
-
-    // Null terminate
-    *value_ptr = '\0';
-
-    DEBUG_PRINTF("http_message_body_parse value: %s\n", value);
-
-    state->callback(value, response_code, state->arg);
+    DEBUG_PRINTF("http_message_body_parse current=%s target=%s\n", state->temperature_result.current, state->temperature_result.target);
+    state->callback(&state->temperature_result, response_code, state->arg);
 }
 
 static err_t tcp_client_close(void *arg) {
@@ -299,7 +305,7 @@ static void tcp_dns_found(const char *hostname, const ip_addr_t *ipaddr, void *a
 }
 
 // Perform initialisation
-static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, const char *method, const char *json_body, const char *key, http_callback_t callback, void *arg) {
+static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg) {
     TCP_CLIENT_T *state = calloc(1, sizeof(TCP_CLIENT_T));
     if (!state) {
         DEBUG_PRINTF("failed to allocate state\n");
@@ -309,15 +315,15 @@ static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, cons
     state->endpoint = endpoint;
     state->method = method;
     state->json_body = json_body;
-    state->key = key;
+    state->request_type = request_type;
 
     state->callback = callback;
     state->arg = arg;
     return state;
 }
 
-void http_request(const char *url, const char *endpoint, const char *method, const char *json_body, const char *key, http_callback_t callback, void *arg) {
-    TCP_CLIENT_T *state = tcp_client_init(url, endpoint, method, json_body, key, callback, arg);
+void http_request(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg) {
+    TCP_CLIENT_T *state = tcp_client_init(url, endpoint, method, json_body, request_type, callback, arg);
     if (!state) {
         return;
     }

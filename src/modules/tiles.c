@@ -35,8 +35,6 @@ void tiles_free() {
 
     for (int i = 0; i < tile_array->used; i++) {
         free(tile_array->tiles[i]->name);
-        restful_free_request_data(tile_array->tiles[i]->action_request);
-        restful_free_request_data(tile_array->tiles[i]->status_request);
         free(tile_array->tiles[i]);
     }
     free(tile_array->tiles);
@@ -56,7 +54,7 @@ void tiles_free() {
     DEBUG_PRINTF("tiles_free: %ld us\n", (long)(to_us_since_boot(get_absolute_time()) - sw_time));
 }
 
-void tiles_add_tile(char *name, uint8_t image_idx, void *action_request, void *status_request) {
+void tiles_add_tile(char *name, uint8_t image_idx, void *action_request, void *status_request, uint8_t type) {
     TILE *tile = (TILE *)malloc(sizeof(TILE));
 
     tile->name = name;
@@ -64,6 +62,8 @@ void tiles_add_tile(char *name, uint8_t image_idx, void *action_request, void *s
     tile->image = (char *)image_tiles[image_idx];
     tile->action_request = action_request;
     tile->status_request = status_request;
+    tile->type = type;
+    tile->display_value = NULL;
 
     if (!tile_array) {
         free(tile);
@@ -125,7 +125,7 @@ char tiles_idx_in_bounds(char idx) {
 char tiles_make_str(char **dest, const char *src) {
     uint8_t str_size = (uint8_t)*src++;
     *dest = (char *)malloc(str_size * sizeof(char) + 1);
-    strncpy(*dest, src, str_size);
+    memcpy(*dest, src, str_size);
     (*dest)[str_size] = '\0';  // Null terminate
     return str_size + 1;
 }
@@ -134,16 +134,13 @@ void tiles_make_tiles() {
     uint64_t sw_time = to_us_since_boot(get_absolute_time());
     tiles_init(API_SERVER, 8);
 
-    RESTFUL_REQUEST_DATA *action_request;
     RESTFUL_REQUEST_DATA *status_request;
     HEADING *heading;
     char *name;
     char *method;
     char *endpoint;
     char *json_body;
-    char *key;
-    char *on_value;
-    char *off_value;
+    uint8_t type;
     int ptr = 0;
 
     heading_count = tiles_data[ptr++];
@@ -170,49 +167,20 @@ void tiles_make_tiles() {
         if (tiles_data[ptr] == 0) {
             ptr++;
             // This is a padding tile
-            tiles_add_tile(NULL, 0, NULL, NULL);
+            tiles_add_tile(NULL, 0, NULL, NULL, 0);
             continue;
         }
         ptr += tiles_make_str(&name, (char *)&tiles_data[ptr]);
 
         char image_idx = tiles_data[ptr++];
-        char request_mask = tiles_data[ptr++];
+        type = tiles_data[ptr++];
+        ptr += tiles_make_str(&method, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&endpoint, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&json_body, (char *)&tiles_data[ptr]);
 
-        // Action request present
-        action_request = NULL;
-        if (request_mask & 1) {
-            ptr += tiles_make_str(&method, (char *)&tiles_data[ptr]);
-            ptr += tiles_make_str(&endpoint, (char *)&tiles_data[ptr]);
-            ptr += tiles_make_str(&json_body, (char *)&tiles_data[ptr]);
+        status_request = restful_make_request_data(method, endpoint, json_body);
 
-            action_request = restful_make_request_data(
-                method,
-                endpoint,
-                json_body,
-                NULL,
-                NULL,
-                NULL);
-        }
-        // Status request present
-        status_request = NULL;
-        if (request_mask & 2) {
-            ptr += tiles_make_str(&method, (char *)&tiles_data[ptr]);
-            ptr += tiles_make_str(&endpoint, (char *)&tiles_data[ptr]);
-            ptr += tiles_make_str(&json_body, (char *)&tiles_data[ptr]);
-            ptr += tiles_make_str(&key, (char *)&tiles_data[ptr]);
-            ptr += tiles_make_str(&on_value, (char *)&tiles_data[ptr]);
-            ptr += tiles_make_str(&off_value, (char *)&tiles_data[ptr]);
-
-            status_request = restful_make_request_data(
-                method,
-                endpoint,
-                json_body,
-                key,
-                on_value,
-                off_value);
-        }
-
-        tiles_add_tile(name, image_idx, action_request, status_request);
+        tiles_add_tile(name, image_idx, NULL, status_request, type);
     }
     DEBUG_PRINTF("tiles_make_tiles: %ld us\n", (long)(to_us_since_boot(get_absolute_time()) - sw_time));
 }

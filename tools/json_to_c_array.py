@@ -53,27 +53,17 @@ def main():
         if tile is None:
             buffer.append(0)
             continue
+
         append_string(buffer, tile["name"])
         buffer.append(tile["image_idx"])
-        request_mask = 0
-        if "action_request" in tile:
-            request_mask |= 1 << 0
-        if "status_request" in tile:
-            request_mask |= 1 << 1
-        buffer.append(request_mask)
-        if "action_request" in tile:
-            request = tile["action_request"]
-            append_string(buffer, request["method"])
-            append_string(buffer, request["endpoint"])
-            append_string(buffer, request["json_body"])
-        if "status_request" in tile:
-            request = tile["status_request"]
-            append_string(buffer, request["method"])
-            append_string(buffer, request["endpoint"])
-            append_string(buffer, request["json_body"])
-            append_string(buffer, request["key"])
-            append_string(buffer, request["on_value"])
-            append_string(buffer, request["off_value"])
+
+        # Numeric type: 0 = boiler, 1 = radiator
+        buffer.append(int(tile.get("type", 0)))
+
+        request = tile["status_request"]
+        append_string(buffer, request["method"])
+        append_string(buffer, request["endpoint"])
+        append_string(buffer, request["json_body"])
 
     if args.wrap:
         print(f"static const char tiles_data[{len(buffer)}] = {{\n    {', '.join(str(b) for b in buffer)}\n}};")

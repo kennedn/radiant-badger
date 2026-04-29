@@ -7,35 +7,31 @@
 #include "tiles.h"
 #include "badger.h"
 
-void restful_callback(char *value, int response_code, void *arg) {
+void restful_callback(void *result, int response_code, void *arg) {
     RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
-    if (response_code != 200 || request->status_request == NULL) {
-        request->callback(value, response_code, arg);
+    if (!request || !request->callback) {
         return;
     }
-    RESTFUL_REQUEST_DATA *status_request = request->status_request;
-    http_request(request->base_url, status_request->endpoint, status_request->method, 
-        status_request->json_body, status_request->key, request->callback, request);
+    request->callback(result, response_code, request);
 }
 
 void restful_request(RESTFUL_REQUEST *request) {
     if (!request) {
         return;
     }
-    RESTFUL_REQUEST_DATA *sub_request = request->action_request;
-    void *callback = restful_callback;
-    char *key = NULL;
+    RESTFUL_REQUEST_DATA *sub_request = request->status_request ? request->status_request : request->action_request;
 
-    if (sub_request == NULL && request->status_request != NULL) {
-        sub_request = request->status_request;
-        callback = request->callback;
-        key = sub_request->key;
-    } else if(sub_request == NULL) {
+    if (sub_request == NULL) {
         DEBUG_PRINTF("No requests present, nothing to do\n");
         return;
     }
 
-    http_request(request->base_url, sub_request->endpoint, sub_request->method, sub_request->json_body, key, callback, request);
+    TILE *tile = (TILE *)request->tile;
+    if (tile && (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR)) {
+        HTTP_REQUEST_TYPE req_type = (tile->type == TILE_TYPE_BOILER) ? REQUEST_TYPE_BOILER : REQUEST_TYPE_RADIATOR;
+        http_request(request->base_url, sub_request->endpoint, sub_request->method, sub_request->json_body, req_type, restful_callback, request);
+        return;
+    }
 }
 
 RESTFUL_REQUEST *restful_make_request(void *tile, const char *base_url, RESTFUL_REQUEST_DATA *action_request, RESTFUL_REQUEST_DATA *status_request, restful_callback_t callback) {
@@ -59,25 +55,15 @@ void restful_free_request(RESTFUL_REQUEST *request) {
     free(request);
 }
 
-RESTFUL_REQUEST_DATA *restful_make_request_data(char *method, char *endpoint, char *json_body, char *key, char *on_value, char *off_value) {
+RESTFUL_REQUEST_DATA *restful_make_request_data(char *method, char *endpoint, char *json_body) {
     if (!method || !endpoint || !json_body) {
         DEBUG_PRINTF("Required data in request data was NULL\n");
-        return NULL;
-    }
-    if (key && (!on_value || !off_value)) {
-        DEBUG_PRINTF("On and Off values missing despite key being specified\n");
         return NULL;
     }
     RESTFUL_REQUEST_DATA *request_data = (RESTFUL_REQUEST_DATA *)malloc(sizeof(RESTFUL_REQUEST_DATA));
     request_data->method = method;
     request_data->endpoint = endpoint;
     request_data->json_body = json_body;
-    request_data->key = NULL;
-    if(key) {
-        request_data->key = key;
-        request_data->on_value = on_value;
-        request_data->off_value = off_value;
-    } 
 
     return request_data;
  }
@@ -89,9 +75,4 @@ void restful_free_request_data(RESTFUL_REQUEST_DATA *request) {
     free(request->method);
     free(request->endpoint);
     free(request->json_body);
-    if (request->key) {
-        free(request->key);
-        free(request->on_value);
-        free(request->off_value);
-    }
 }
