@@ -149,12 +149,11 @@ static void restore_tiles_screen() {
 }
 
 static void request_tile_mode(TILE *tile) {
-    if (!tile || !tile->mode_request) {
+    if (!tile || !tile->mode_request || tile->mode > 4) {
         return;
     }
 
-    uint8_t current_mode = tile->has_mode ? tile->mode : 0;
-    uint8_t next_mode = (current_mode + 1) % 5;
+    uint8_t next_mode = (tile->mode + 1) % 5;
     char json_body[128];
     snprintf(json_body, sizeof(json_body), tile->mode_request->json_body, next_mode);
 
@@ -185,7 +184,6 @@ void restful_callback(void *result, int status_code, void *arg) {
             float target = strtof(temp_result->target, NULL) / 10.0f;
             snprintf(display, sizeof(display), "%.1f/%.1f", current, target);
             tile->mode = (uint8_t)atoi(temp_result->mode);
-            tile->has_mode = 1;
             
             if (display[0] != '\0') {
                 free(tile->display_value);

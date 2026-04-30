@@ -103,9 +103,11 @@ void draw_tiles(pimoroni::Badger2040W &badger, const char *selected_name, const 
 
         // Header
         badger.graphics->set_pen(0);
+        badger.graphics->set_font("bitmap8");
         int32_t name_size = badger.graphics->measure_text(tile->name, scale);
         int32_t name_x_offset = (tile_pad_x - name_size) /2 ;
         badger.graphics->text(tile->name, Point((tile_pad_x*i) + name_x_offset, tile_pad_y), tile_pad_x, scale);
+        badger.graphics->set_font("bitmap8");
 
         // Footer
         if (tile->display_value && tile->display_value[0]) {
@@ -157,50 +159,52 @@ void draw_tile_detail(pimoroni::Badger2040W &badger, TILE *tile) {
 
     // Header
     badger.graphics->set_pen(0);
+    badger.graphics->set_font("bitmap8");
     int32_t name_size = badger.graphics->measure_text(tile->name, scale);
     int32_t name_x_offset = (tile_pad_x - name_size) /2 ;
     badger.graphics->text(tile->name, Point(name_x_offset, tile_pad_y), tile_pad_x, scale);
+    badger.graphics->set_font("bitmap8");
 
     char line[48];
     
     // Tile B: Status label and value (column 2)
-    badger.graphics->set_font("bitmap14_outline");
-    snprintf(line, sizeof(line), "Status");
-    badger.graphics->text(line, Point(tile_pad_x + tile_offset, tile_pad_y), label_width, 1.5f);
+    badger.graphics->set_font("bitmap8");
+    snprintf(line, sizeof(line), "STATUS");
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset, tile_pad_y), label_width, scale);
     badger.graphics->set_font("bitmap8");
     if (tile->display_value && tile->display_value[0]) {
         snprintf(line, sizeof(line), "%s", tile->display_value);
     } else {
         snprintf(line, sizeof(line), "--");
     }
-    badger.graphics->text(line, Point(tile_pad_x + tile_offset, tile_pad_y + text_offset), label_width, 2.0f);
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset, tile_pad_y + text_offset), label_width, scale);
 
     // Tile C: Mode label and value (column 3)
-    badger.graphics->set_font("bitmap14_outline");
-    snprintf(line, sizeof(line), "Mode");
-    badger.graphics->text(line, Point(tile_pad_x * 2 + tile_offset, tile_pad_y), label_width, 1.5f);
     badger.graphics->set_font("bitmap8");
-    if (tile->has_mode) {
+    snprintf(line, sizeof(line), "MODE");
+    badger.graphics->text(line, Point(tile_pad_x * 2 + tile_offset, tile_pad_y), label_width, scale);
+    badger.graphics->set_font("bitmap8");
+        if (tile->mode <= 5) {
         snprintf(line, sizeof(line), "%d", tile->mode);
     } else {
         snprintf(line, sizeof(line), "--");
     }
-    badger.graphics->text(line, Point(tile_pad_x * 2 + tile_offset, tile_pad_y + text_offset), label_width, 2.0f);
-    badger.graphics->set_font("bitmap14_outline");
-    const char* labels[] = {"MODE++ ", " ", " "};
-    for (int i = 0; i < 3; ++i) {
-        auto t = labels[i];
-        int32_t text_size = badger.graphics->measure_text(t, 1.5f);
-        int32_t text_x_offset = (tile_pad_x - text_size) / 2;
-        badger.graphics->text(t, Point((tile_pad_x * i) + text_x_offset, 106), label_width, 1.5f);
-    }
+    badger.graphics->text(line, Point(tile_pad_x * 2 + tile_offset, tile_pad_y + text_offset), label_width, scale);
+    badger.graphics->set_font("bitmap8");
+    // const char* labels[] = {"MODE++ ", " ", " "};
+    // for (int i = 0; i < 3; ++i) {
+    //     auto t = labels[i];
+    //     int32_t text_size = badger.graphics->measure_text(t, 1.5f);
+    //     int32_t text_x_offset = (tile_pad_x - text_size) / 2;
+    //     badger.graphics->text(t, Point((tile_pad_x * i) + text_x_offset, 106), label_width, 1.5f);
+    // }
 
-    const char* labels_vert[] = {"BACK", "REFRESH"};
-    for (int i = 0; i < 2; ++i) {
-        auto t = labels_vert[i];
-        int32_t text_size = badger.graphics->measure_text(t, 1.5f);
-        int32_t text_x_offset = (tile_pad_x - text_size) / 2;
-        badger.graphics->text(t, Point((tile_pad_x * 3) - 16, tile_pad_y + text_x_offset + (HEIGHT / 2 * i)), label_width, 1.5f, 270);
-    }
+    // const char* labels_vert[] = {"BACK", "REFRESH"};
+    // for (int i = 0; i < 2; ++i) {
+    //     auto t = labels_vert[i];
+    //     int32_t text_size = badger.graphics->measure_text(t, 1.5f);
+    //     int32_t text_x_offset = (tile_pad_x - text_size) / 2;
+    //     badger.graphics->text(t, Point((tile_pad_x * 3) - 16, tile_pad_y + text_x_offset + (HEIGHT / 2 * i)), label_width, 1.5f, 270);
+    // }
     badger.graphics->set_font("bitmap8");
 }

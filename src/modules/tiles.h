@@ -16,7 +16,6 @@ typedef struct TILE_ {
     RESTFUL_REQUEST_DATA *status_request;
     uint8_t type;
     uint8_t mode;
-    uint8_t has_mode;
     char *display_value;
 } TILE;
 

@@ -3,7 +3,7 @@
         "heading": "Up",
         "icon_idx": 0,
         "tile_a": {
-            "name": "Boiler",
+            "name": "BOILER",
             "type": 0,
             "image_idx": 13,
             "status_request": {
@@ -18,7 +18,7 @@
             }
         },
         "tile_b": {
-            "name": "Office",
+            "name": "OFFICE",
             "type": 1,
             "image_idx": 14,
             "status_request": {
@@ -33,7 +33,7 @@
             }
         },
         "tile_c": {
-            "name": "Bedroom",
+            "name": "BEDROOM",
             "type": 1,
             "image_idx": 14,
             "status_request": {
@@ -52,7 +52,7 @@
         "heading": "Down",
         "icon_idx": 0,
         "tile_a": {
-            "name": "Boiler",
+            "name": "BOILER",
             "type": 0,
             "image_idx": 13,
             "status_request": {
@@ -67,7 +67,7 @@
             }
         },
         "tile_b": {
-            "name": "Livingroom",
+            "name": "LIVINGROOM",
             "type": 1,
             "image_idx": 14,
             "status_request": {
@@ -82,7 +82,7 @@
             }
         },
         "tile_c": {
-            "name": "Kitchen",
+            "name": "KITCHEN",
             "type": 1,
             "image_idx": 14,
             "status_request": {

@@ -47,9 +47,9 @@ typedef struct TCP_CLIENT_T_ {
     int buffer_len;
     int sent_len;
     char base_url[64];
-    char method[8];
-    char endpoint[128];
-    char json_body[128];
+    const char *method;
+    const char *endpoint;
+    const char *json_body;
     HTTP_REQUEST_TYPE request_type;
     HTTP_TEMPERATURE_RESULT temperature_result;
     http_callback_t callback;
@@ -313,9 +313,9 @@ static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, cons
         return NULL;
     }
     strncpy(state->base_url, url, count_of(state->base_url) - 1);
-    strncpy(state->endpoint, endpoint, count_of(state->endpoint) - 1);
-    strncpy(state->method, method, count_of(state->method) - 1);
-    strncpy(state->json_body, json_body ? json_body : "", count_of(state->json_body) - 1);
+    state->endpoint = endpoint;
+    state->method = method;
+    state->json_body = json_body;
     state->request_type = request_type;
 
     state->callback = callback;

@@ -66,8 +66,8 @@ void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_re
     tile->mode_request = mode_request;
     tile->status_request = status_request;
     tile->type = type;
-    tile->mode = 0;
-    tile->has_mode = 0;
+    // Use 0xFF to indicate "mode not set" (valid modes are 0-4)
+    tile->mode = 0xFF;
     tile->display_value = NULL;
 
     if (!tile_array) {
