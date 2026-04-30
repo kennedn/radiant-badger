@@ -14,8 +14,12 @@ typedef struct TILE_ {
     char *image;
     RESTFUL_REQUEST_DATA *mode_request;
     RESTFUL_REQUEST_DATA *status_request;
+    RESTFUL_REQUEST_DATA *battery_request;
+    RESTFUL_REQUEST_DATA *target_request;
     uint8_t type;
     uint8_t mode;
+    uint16_t target_temp;
+    char *battery_value;
     char *display_value;
 } TILE;
 

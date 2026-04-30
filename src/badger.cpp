@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "pico/cyw43_arch.h"
 #include "pico/platform.h"
@@ -57,11 +58,14 @@ void deinit(const char *message = NULL);
 
 void restful_callback(void *result, int status_code, void *arg);
 static void mode_update_callback(void *result, int status_code, void *arg);
+static void boiler_target_update_callback(void *result, int status_code, void *arg);
 static void render_current_screen();
 static void refresh_tile_status(TILE *tile);
 static void refresh_visible_tiles();
 static void request_tile_mode(TILE *tile);
+static void request_boiler_target_toggle(TILE *tile);
 static void restore_tiles_screen();
+static void refresh_tile_detail(TILE *tile);
 
 void ntp_callback(datetime_t *datetime, void *arg) {
     if (datetime == NULL) {
@@ -111,6 +115,8 @@ static void refresh_tile_status(TILE *tile) {
         tile_array->base_url,
         NULL,
         tile->status_request,
+        NULL,
+        -1,
         restful_callback));
 }
 
@@ -154,11 +160,51 @@ static void request_tile_mode(TILE *tile) {
     }
 
     uint8_t next_mode = (tile->mode + 1) % 5;
-    char json_body[128];
-    snprintf(json_body, sizeof(json_body), tile->mode_request->json_body, next_mode);
 
-    HTTP_REQUEST_TYPE req_type = (tile->type == TILE_TYPE_BOILER) ? REQUEST_TYPE_BOILER : REQUEST_TYPE_RADIATOR;
-    http_request(tile_array->base_url, tile->mode_request->endpoint, tile->mode_request->method, json_body, req_type, mode_update_callback, tile);
+    restful_request(restful_make_request(
+        tile,
+        tile_array->base_url,
+        tile->mode_request,
+        NULL,
+        NULL,
+        next_mode,
+        mode_update_callback));
+}
+
+static void request_boiler_target_toggle(TILE *tile) {
+    if (!tile || tile->type != TILE_TYPE_BOILER) {
+        return;
+    }
+
+    if (!tile->target_request) {
+        return;
+    }
+
+    uint16_t next_target = (tile->target_temp == 50) ? 350 : 50;
+
+    restful_request(restful_make_request(
+        tile,
+        tile_array->base_url,
+        tile->target_request,
+        NULL,
+        NULL,
+        next_target,
+        boiler_target_update_callback));
+}
+
+static void refresh_tile_detail(TILE *tile) {
+    if (!tile) {
+        return;
+    }
+
+    restful_request(restful_make_request(
+        tile,
+        tile_array->base_url,
+        NULL,
+        tile->status_request,
+        tile->battery_request,
+        -1,
+        restful_callback));
 }
 
 void restful_callback(void *result, int status_code, void *arg) {
@@ -168,6 +214,7 @@ void restful_callback(void *result, int status_code, void *arg) {
 
     RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
     TILE *tile = (TILE *)request->tile;
+    DEBUG_PRINTF("restful_callback: tile=%s, status_code=%d, battery_value=%s\n", tile ? tile->name : "(null)", status_code, (tile && tile->battery_value) ? tile->battery_value : "(null)");
 
     DEBUG_PRINTF("restful_callback: status_code=%d, caller=%s, tile_type=%u\n", status_code, tile->name, tile->type);
 
@@ -184,6 +231,7 @@ void restful_callback(void *result, int status_code, void *arg) {
             float target = strtof(temp_result->target, NULL) / 10.0f;
             snprintf(display, sizeof(display), "%.1f/%.1f", current, target);
             tile->mode = (uint8_t)atoi(temp_result->mode);
+            tile->target_temp = (uint16_t)atoi(temp_result->target);
             
             if (display[0] != '\0') {
                 free(tile->display_value);
@@ -207,23 +255,59 @@ void restful_callback(void *result, int status_code, void *arg) {
         return;
     }
 
-    render_current_screen();
+    if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
+        render_current_screen();
+    }
+
     restful_free_request(request);
 }
 
 static void mode_update_callback(void *result, int status_code, void *arg) {
     (void)result;
-    TILE *tile = (TILE *)arg;
+    if (!arg) {
+        return;
+    }
+
+    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
+    TILE *tile = (TILE *)request->tile;
     if (!tile) {
+        restful_free_request(request);
         return;
     }
 
     if (status_code == 200) {
         refresh_tile_status(tile);
+        restful_free_request(request);
         return;
     }
 
+    restful_free_request(request);
     render_current_screen();
+}
+
+static void boiler_target_update_callback(void *result, int status_code, void *arg) {
+    (void)result;
+    if (!arg) {
+        return;
+    }
+
+    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
+    TILE *tile = (TILE *)request->tile;
+    if (!tile) {
+        restful_free_request(request);
+        return;
+    }
+
+    if (status_code == 200) {
+        restful_free_request(request);
+        refresh_tile_detail(tile);
+        return;
+    }
+
+    restful_free_request(request);
+    if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
+        render_current_screen();
+    }
 }
 
 int64_t halt_timeout_callback(alarm_id_t id, void *arg) {
@@ -491,9 +575,8 @@ int main() {
 
             active_tile = tile;
             current_screen = APP_SCREEN_DETAIL;
-            badger.graphics->set_pen(15);
-            badger.graphics->clear();
-            render_current_screen();
+            // Defer rendering until after status/battery requests complete.
+            refresh_tile_detail(active_tile);
             initialised = true;
             continue;
         }
@@ -507,7 +590,7 @@ int main() {
                 if (!wifi_up()) {
                     wifi_wait();
                 }
-                refresh_tile_status(active_tile);
+                refresh_tile_detail(active_tile);
                 continue;
             }
             if (badger.pressed(badger.A)) {
@@ -515,6 +598,13 @@ int main() {
                     wifi_wait();
                 }
                 request_tile_mode(active_tile);
+                continue;
+            }
+            if (badger.pressed(badger.B) && active_tile->type == TILE_TYPE_BOILER) {
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                request_boiler_target_toggle(active_tile);
                 continue;
             }
         }

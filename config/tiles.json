@@ -15,6 +15,11 @@
                 "method": "POST",
                 "endpoint": "/v2/thermostat",
                 "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            },
+            "target_request": {
+                "method": "POST",
+                "endpoint": "/v2/thermostat",
+                "json_body": "{\"code\":\"heatTemp\",\"value\":%d}"
             }
         },
         "tile_b": {
@@ -30,6 +35,11 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/office",
                 "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            },
+            "battery_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/office",
+                "json_body": "{\"code\": \"battery\"}"
             }
         },
         "tile_c": {
@@ -45,6 +55,11 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/bedroom",
                 "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            },
+            "battery_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/bedroom",
+                "json_body": "{\"code\": \"battery\"}"
             }
         }
     },
@@ -64,6 +79,11 @@
                 "method": "POST",
                 "endpoint": "/v2/thermostat",
                 "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            },
+            "target_request": {
+                "method": "POST",
+                "endpoint": "/v2/thermostat",
+                "json_body": "{\"code\":\"heatTemp\",\"value\":%d}"
             }
         },
         "tile_b": {
@@ -79,6 +99,11 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/livingroom",
                 "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            },
+            "battery_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/livingroom",
+                "json_body": "{\"code\": \"battery\"}"
             }
         },
         "tile_c": {
@@ -94,6 +119,11 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/kitchen",
                 "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            },
+            "battery_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/kitchen",
+                "json_body": "{\"code\": \"battery\"}"
             }
         }
     }

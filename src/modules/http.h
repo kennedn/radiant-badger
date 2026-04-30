@@ -4,13 +4,15 @@
 
 typedef enum {
     REQUEST_TYPE_BOILER = 0,
-    REQUEST_TYPE_RADIATOR = 1
+    REQUEST_TYPE_RADIATOR = 1,
+    REQUEST_TYPE_RADIATOR_BATTERY = 2
 } HTTP_REQUEST_TYPE;
 
 typedef struct {
     char current[32];
     char target[32];
     char mode[32];
+    char battery[32];
 } HTTP_TEMPERATURE_RESULT;
 
 typedef void (*http_callback_t)(void *result, int response_code, void *arg);

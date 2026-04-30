@@ -23,7 +23,7 @@ def main():
     if args.file is None:
         args.file = "config/tiles.json"
 
-    with open(args.file, 'r') as file:
+    with open(args.file, 'r', encoding='utf-8') as file:
         columns = json.load(file)
     
     # Create an array of unsigned integers (uint8)
@@ -69,6 +69,16 @@ def main():
         append_string(buffer, mode_request["method"])
         append_string(buffer, mode_request["endpoint"])
         append_string(buffer, mode_request["json_body"])
+
+        battery_request = tile.get("battery_request", {"method": "", "endpoint": "", "json_body": ""})
+        append_string(buffer, battery_request["method"])
+        append_string(buffer, battery_request["endpoint"])
+        append_string(buffer, battery_request["json_body"])
+
+        target_request = tile.get("target_request", {"method": "", "endpoint": "", "json_body": ""})
+        append_string(buffer, target_request["method"])
+        append_string(buffer, target_request["endpoint"])
+        append_string(buffer, target_request["json_body"])
 
     if args.wrap:
         print(f"static const char tiles_data[{len(buffer)}] = {{\n    {', '.join(str(b) for b in buffer)}\n}};")

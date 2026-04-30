@@ -148,6 +148,7 @@ void draw_tile_detail(pimoroni::Badger2040W &badger, TILE *tile) {
     char tile_pad_y = 25;              // vertical position for content
     char tile_offset = 18;             // x offset from column start
     char text_offset = 20;             // y offset for text below icon
+    char row_offset = HEIGHT / 2 + 4;        // vertical offset for second row of content plus small pad
     char label_width = tile_pad_x;
     float scale = 2.0f;
 
@@ -178,6 +179,17 @@ void draw_tile_detail(pimoroni::Badger2040W &badger, TILE *tile) {
         snprintf(line, sizeof(line), "--");
     }
     badger.graphics->text(line, Point(tile_pad_x + tile_offset, tile_pad_y + text_offset), label_width, scale);
+
+    if (tile->type == TILE_TYPE_RADIATOR) {
+        snprintf(line, sizeof(line), "BATTERY");
+        badger.graphics->text(line, Point(tile_pad_x + tile_offset, row_offset), label_width, scale);
+        if (tile->battery_value && tile->battery_value[0]) {
+            snprintf(line, sizeof(line), "%s%%", tile->battery_value);
+        } else {
+            snprintf(line, sizeof(line), "--");
+        }
+        badger.graphics->text(line, Point(tile_pad_x + tile_offset, row_offset + text_offset), label_width, scale);
+    }
 
     // Tile C: Mode label and value (column 3)
     badger.graphics->set_font("bitmap8");

@@ -104,7 +104,7 @@ static void http_process_buffer(void *arg) {
     int response_code = atoi(++message_body);
 
     // For non-temperature request types, just return the response code
-    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR) {
+    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR && state->request_type != REQUEST_TYPE_RADIATOR_BATTERY) {
         state->callback(NULL, response_code, state->arg);
         return;
     }
@@ -123,6 +123,16 @@ static void http_process_buffer(void *arg) {
     }
     message_body++;
     DEBUG_PRINTF("http_message_body_parse message_body: %s\n", message_body);
+
+    if (state->request_type == REQUEST_TYPE_RADIATOR_BATTERY) {
+        if (!http_extract_simple_value(message_body, "value", state->temperature_result.battery, sizeof(state->temperature_result.battery))) {
+            state->callback(NULL, response_code, state->arg);
+            return;
+        }
+        DEBUG_PRINTF("http_message_body_parse battery=%s\n", state->temperature_result.battery);
+        state->callback(&state->temperature_result, response_code, state->arg);
+        return;
+    }
 
     // Extract current, target and mode values
     if (!http_extract_simple_value(message_body, "current", state->temperature_result.current, sizeof(state->temperature_result.current)) ||
