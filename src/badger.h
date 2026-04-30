@@ -6,3 +6,5 @@
 #define HALT_TIMEOUT_MS 60000
 #define MULTI_CLICK_WAIT_MS 350
 #define WIFI_CONNECT_ATTEMPTS 3
+
+bool wifi_up();

@@ -1,6 +1,6 @@
 [
     {
-        "heading": "Down",
+        "heading": "Up",
         "icon_idx": 0,
         "tile_a": {
             "name": "Boiler",
@@ -10,6 +10,11 @@
                 "method": "POST",
                 "endpoint": "/v2/thermostat",
                 "json_body": "{\"code\": \"status\"}"
+            },
+            "mode_request": {
+                "method": "POST",
+                "endpoint": "/v2/thermostat",
+                "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
             }
         },
         "tile_b": {
@@ -20,6 +25,75 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/office",
                 "json_body": "{\"code\": \"status\"}"
+            },
+            "mode_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/office",
+                "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            }
+        },
+        "tile_c": {
+            "name": "Bedroom",
+            "type": 1,
+            "image_idx": 14,
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/bedroom",
+                "json_body": "{\"code\": \"status\"}"
+            },
+            "mode_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/bedroom",
+                "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            }
+        }
+    },
+    {
+        "heading": "Down",
+        "icon_idx": 0,
+        "tile_a": {
+            "name": "Boiler",
+            "type": 0,
+            "image_idx": 13,
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/thermostat",
+                "json_body": "{\"code\": \"status\"}"
+            },
+            "mode_request": {
+                "method": "POST",
+                "endpoint": "/v2/thermostat",
+                "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            }
+        },
+        "tile_b": {
+            "name": "Livingroom",
+            "type": 1,
+            "image_idx": 14,
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/livingroom",
+                "json_body": "{\"code\": \"status\"}"
+            },
+            "mode_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/livingroom",
+                "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+            }
+        },
+        "tile_c": {
+            "name": "Kitchen",
+            "type": 1,
+            "image_idx": 14,
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/kitchen",
+                "json_body": "{\"code\": \"status\"}"
+            },
+            "mode_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/kitchen",
+                "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
             }
         }
     }

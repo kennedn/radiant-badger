@@ -12,9 +12,11 @@ typedef struct HEADING_ {
 typedef struct TILE_ {
     char *name;
     char *image;
-    void *action_request;
-    void *status_request;
+    RESTFUL_REQUEST_DATA *mode_request;
+    RESTFUL_REQUEST_DATA *status_request;
     uint8_t type;
+    uint8_t mode;
+    uint8_t has_mode;
     char *display_value;
 } TILE;
 

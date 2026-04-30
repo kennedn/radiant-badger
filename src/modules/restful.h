@@ -1,6 +1,5 @@
 #pragma once
 
-#include "tiles.h"
 #include "http.h"
 
 typedef void (*restful_callback_t)(void *result, int response_code, void *arg);

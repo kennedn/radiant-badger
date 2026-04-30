@@ -10,6 +10,7 @@ typedef enum {
 typedef struct {
     char current[32];
     char target[32];
+    char mode[8];
 } HTTP_TEMPERATURE_RESULT;
 
 typedef void (*http_callback_t)(void *result, int response_code, void *arg);

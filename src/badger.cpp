@@ -17,6 +17,7 @@ extern "C" {
 #include "modules/piezo.h"
 }
 
+#include "modules/screens.h"
 #include "badger.h"
 #include "libraries/badger2040w/badger2040w.hpp"
 
@@ -41,10 +42,26 @@ static volatile bool ntp_time_set = false;
 static volatile bool halt_initiated = false;
 static volatile bool initialised = false;
 
-void draw_status_bar();
-void draw_status_bar(const char *message);
-void draw_tiles(const char *name, const char *indicator_icon);
+enum APP_SCREEN {
+    APP_SCREEN_TILES = 0,
+    APP_SCREEN_DETAIL = 1,
+};
+
+static APP_SCREEN current_screen = APP_SCREEN_TILES;
+static TILE *active_tile = NULL;
+static volatile bool visible_refresh_active = false;
+static volatile uint8_t visible_refresh_pending = 0;
+static uint8_t visible_refresh_column = 0;
+
 void deinit(const char *message = NULL);
+
+void restful_callback(void *result, int status_code, void *arg);
+static void mode_update_callback(void *result, int status_code, void *arg);
+static void render_current_screen();
+static void refresh_tile_status(TILE *tile);
+static void refresh_visible_tiles();
+static void request_tile_mode(TILE *tile);
+static void restore_tiles_screen();
 
 void ntp_callback(datetime_t *datetime, void *arg) {
     if (datetime == NULL) {
@@ -69,13 +86,88 @@ void ntp_callback(datetime_t *datetime, void *arg) {
     ntp_time_set = true;
 }
 
+static void render_current_screen() {
+    badger.graphics->set_pen(15);
+    badger.graphics->clear();
+
+    if (current_screen == APP_SCREEN_DETAIL) {
+        draw_tile_detail(badger, active_tile);
+    } else {
+        draw_tiles(badger, NULL, NULL);
+    }
+
+    // Always draw status bar last so it overlays all other UI elements.
+    draw_status_bar(badger, NULL);
+    badger.update();
+    badger.uc8151->busy_wait();
+}
+
+static void refresh_tile_status(TILE *tile) {
+    if (!tile || !tile->status_request) {
+        return;
+    }
+    restful_request(restful_make_request(
+        tile,
+        tile_array->base_url,
+        NULL,
+        tile->status_request,
+        restful_callback));
+}
+
+static void refresh_visible_tiles() {
+    visible_refresh_active = true;
+    visible_refresh_pending = 0;
+    visible_refresh_column = (uint8_t)tiles_get_column();
+
+    char tiles_base_idx = tiles_get_base_idx();
+    for (char i = 0; i < 3; i++) {
+        if (!tiles_idx_in_bounds(tiles_base_idx + i)) {
+            break;
+        }
+        TILE *tile = tile_array->tiles[tiles_base_idx + i];
+        if (!tile || !tile->status_request) {
+            continue;
+        }
+        visible_refresh_pending++;
+        refresh_tile_status(tile);
+    }
+
+    if (visible_refresh_pending == 0) {
+        visible_refresh_active = false;
+        if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
+            render_current_screen();
+        }
+    }
+}
+
+static void restore_tiles_screen() {
+    current_screen = APP_SCREEN_TILES;
+    active_tile = NULL;
+    badger.graphics->set_pen(15);
+    badger.graphics->clear();
+    render_current_screen();
+}
+
+static void request_tile_mode(TILE *tile) {
+    if (!tile || !tile->mode_request) {
+        return;
+    }
+
+    uint8_t current_mode = tile->has_mode ? tile->mode : 0;
+    uint8_t next_mode = (current_mode + 1) % 5;
+    char json_body[128];
+    snprintf(json_body, sizeof(json_body), tile->mode_request->json_body, next_mode);
+
+    HTTP_REQUEST_TYPE req_type = (tile->type == TILE_TYPE_BOILER) ? REQUEST_TYPE_BOILER : REQUEST_TYPE_RADIATOR;
+    http_request(tile_array->base_url, tile->mode_request->endpoint, tile->mode_request->method, json_body, req_type, mode_update_callback, tile);
+}
+
 void restful_callback(void *result, int status_code, void *arg) {
     if (arg == NULL) {
         return;
     }
 
     RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
-
     TILE *tile = (TILE *)request->tile;
 
     DEBUG_PRINTF("restful_callback: status_code=%d, caller=%s, tile_type=%u\n", status_code, tile->name, tile->type);
@@ -85,7 +177,6 @@ void restful_callback(void *result, int status_code, void *arg) {
             free(tile->display_value);
             tile->display_value = NULL;
         }
-        draw_tiles(tile->name, image_indicator_question);
     } else if (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR) {
         if (result) {
             HTTP_TEMPERATURE_RESULT *temp_result = (HTTP_TEMPERATURE_RESULT *)result;
@@ -93,32 +184,48 @@ void restful_callback(void *result, int status_code, void *arg) {
             float current = strtof(temp_result->current, NULL) / 10.0f;
             float target = strtof(temp_result->target, NULL) / 10.0f;
             snprintf(display, sizeof(display), "%.1f/%.1f", current, target);
+            tile->mode = (uint8_t)atoi(temp_result->mode);
+            tile->has_mode = 1;
             
             if (display[0] != '\0') {
                 free(tile->display_value);
                 tile->display_value = (char *)malloc(strlen(display) + 1);
                 strcpy(tile->display_value, display);
-                draw_tiles(tile->name, image_indicator_tick);
-            } else {
-                draw_tiles(tile->name, image_indicator_question);
             }
-        } else {
-            draw_tiles(tile->name, image_indicator_question);
         }
-    } else {
-        draw_tiles(tile->name, image_indicator_tick);
     }
-    
-    restful_free_request(request);
-    draw_status_bar();
-    // if (initialised) {
-    // badger.uc8151->set_update_speed(3);
-    // }
 
-    badger.update();
-    badger.uc8151->busy_wait();
-    initialised = true;
-    // badger.uc8151->set_update_speed(2);
+    if (visible_refresh_active) {
+        if (visible_refresh_pending > 0) {
+            visible_refresh_pending--;
+        }
+        if (visible_refresh_pending == 0) {
+            visible_refresh_active = false;
+            if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
+                render_current_screen();
+            }
+        }
+        restful_free_request(request);
+        return;
+    }
+
+    render_current_screen();
+    restful_free_request(request);
+}
+
+static void mode_update_callback(void *result, int status_code, void *arg) {
+    (void)result;
+    TILE *tile = (TILE *)arg;
+    if (!tile) {
+        return;
+    }
+
+    if (status_code == 200) {
+        refresh_tile_status(tile);
+        return;
+    }
+
+    render_current_screen();
 }
 
 int64_t halt_timeout_callback(alarm_id_t id, void *arg) {
@@ -239,146 +346,6 @@ char wait_for_button_press_release() {
     }
 }
 
-void draw_status_bar() {
-    draw_status_bar(NULL);
-}
-
-void draw_status_bar(const char *message) {
-    datetime_t datetime;
-    float voltage;
-    char powerPercent = 0;
-    char percentStr[5];
-    char clock_str[12];
-    char status_x_offset = 0;
-    char x_pad = 4;
-    int32_t clock_x_offset;
-    uint8_t *wifi_image = (uint8_t *)image_status_wifi_on;
-    uint8_t *battery_image = (uint8_t *)image_status_battery_charging;
-    uint8_t *heading_icon = NULL;
-    if (!power_is_charging()) {
-        battery_image = (uint8_t *)image_status_battery_discharging;
-        status_x_offset = 22;
-
-        power_voltage(&voltage);
-        powerPercent = power_percent(&voltage);
-        sprintf(percentStr, "%d%%", powerPercent);
-    }
-
-    if(message) {
-        wifi_image = (uint8_t *)image_status_sleeping;
-        snprintf(clock_str, sizeof(clock_str), "%s", message);
-    } else {
-        if(!wifi_up()) {
-            wifi_image = (uint8_t *)image_status_wifi_off;
-        }
-        rtc_get_datetime(&datetime);
-        snprintf(clock_str, sizeof(clock_str), "%02d:%02d\n", datetime.hour, datetime.min);
-        heading_icon = (uint8_t *)tiles_get_heading()->icon;
-    }
-    clock_x_offset = badger.graphics->measure_text(clock_str, 2.0f) / 2;
-
-    badger.graphics->set_pen(0);
-    badger.graphics->rectangle(Rect(0, 0, WIDTH, 20));
-
-    badger.graphics->set_pen(15);
-    badger.graphics->text(clock_str, Point(WIDTH / 2 - clock_x_offset, 3), WIDTH, 2.0f);
-
-    if (heading_icon) {
-        badger.graphics->text(tiles_get_heading()->heading, Point(image_status_size + x_pad * 2, 2), WIDTH, 2.0f);
-        badger.image(heading_icon, Rect(x_pad, 2, image_status_size, image_status_size));
-    } else {
-        badger.graphics->text("restfulBadger", Point(x_pad, 6), WIDTH, 1.0f);
-    }
-    badger.image(battery_image, Rect(WIDTH - status_x_offset - (image_status_size + x_pad), 2, image_status_size, image_status_size));
-    badger.image(wifi_image, Rect(WIDTH - status_x_offset - (image_status_size + x_pad) * 2, 2, image_status_size, image_status_size));
-    if (!power_is_charging()) {
-        badger.graphics->set_pen(15);
-        badger.graphics->text(percentStr, Point(WIDTH - status_x_offset, 6), WIDTH, 1.0);
-        badger.graphics->rectangle(Rect(WIDTH - status_x_offset - (image_status_size + x_pad) + 2, 7, powerPercent / 10 + 1, 6));
-    }
-}
-
-void draw_tiles(const char *name, const char *indicator_icon) {
-    char tiles_base_idx = tiles_get_base_idx();
-    char tile_pad_x = WIDTH / 3;
-    char tile_pad_y = 18;
-    char tile_offset = 18;
-    char column_pad_y = 10;
-    char indicator_offset = 44;
-    char text_offset = 20;
-    badger.graphics->set_pen(15);
-    badger.graphics->clear();
-    for(char i=0; i< 3; i++) {
-        if (!tiles_idx_in_bounds(tiles_base_idx + i)) {
-            break;
-        } 
-        TILE *tile = tile_array->tiles[tiles_base_idx + i];
-        if (!tile->image || !tile->name) { // Probably a padding tile
-            continue;
-        }
-        badger.image((const uint8_t *)tile->image, Rect(tile_offset + (tile_pad_x*i), tile_pad_y, image_tile_size, image_tile_size));
-        badger.graphics->set_pen(0);
-
-        // Use display_value if set, otherwise use name
-        // const char *display_text = (tile->display_value && tile->display_value[0]) ? tile->display_value : tile->name;
-
-        // Determine the true width of the string if a wrap point exists
-        // int32_t name_size = badger.graphics->measure_text(display_text, 2.0f);
-        // int32_t prev_name_size = name_size;
-        // if (name_size > tile_pad_x) {
-        //     char *space_ptr = (char *)display_text;
-        //     char has_wrap = false;
-        //     while (true) {
-        //         space_ptr = strchr(space_ptr, ' ');
-        //         if (space_ptr == NULL) {
-        //             break;
-        //         }
-        //         has_wrap = true;
-        //         *space_ptr = '\0';
-        //         name_size = badger.graphics->measure_text(display_text, 2.0f);
-        //         *space_ptr = ' ';
-        //         space_ptr++;    // Move past space character for next iteration
-        //         if (name_size > tile_pad_x) {
-        //             name_size = prev_name_size;
-        //             break;
-        //         }
-        //         prev_name_size = name_size;
-        //     }
-
-        //     if (has_wrap) {
-        //         text_offset = 4;    // Correct y offset for multiple lines
-        //     }
-        // }
-        int32_t name_size = badger.graphics->measure_text(tile->name, 2.0f);
-        int32_t name_x_offset = (tile_pad_x - name_size) /2 ;
-        badger.graphics->text(tile->name, Point((tile_pad_x*i) + name_x_offset, tile_pad_y + image_tile_size), tile_pad_x, 2);
-        if (tile->display_value && tile->display_value[0]) {
-            name_size = badger.graphics->measure_text(tile->display_value, 2.0f);
-            name_x_offset = (tile_pad_x - name_size) /2 ;
-            badger.graphics->text(tile->display_value, Point((tile_pad_x*i) + name_x_offset, tile_pad_y + image_tile_size + text_offset), tile_pad_x, 2);
-        }
-        if(!strcmp(name, tile->name)) {
-            badger.image((const uint8_t *)indicator_icon, 
-                Rect(tile_offset + (tile_pad_x*i) + indicator_offset, tile_pad_y + indicator_offset, image_indicator_size, image_indicator_size));
-        }
-    }
-
-    DEBUG_PRINTF("current column: %d, max: %d\n", tiles_get_column(), tiles_max_column());
-    // Can only fit 10 squares on screen at a time, so if max columns exceeds this we must split the display up into sections of 10
-    char current_col = tiles_get_column() % 10;
-    char last_10s_col = tiles_max_column() - tiles_max_column() % 10;
-    char max_col = (tiles_get_column() < last_10s_col) ? 10 : tiles_max_column() % 10;
-    for (char i=0; i < max_col; i++) {
-        badger.graphics->set_pen(0);
-        char y = column_pad_y + (HEIGHT / 2) - (max_col * 10 / 2) + (i * 10);
-        badger.graphics->rectangle(Rect(WIDTH - 10, y, 20, 8)); 
-        if (current_col != i) {
-            badger.graphics->set_pen(15);
-            badger.graphics->rectangle(Rect(WIDTH - 10 + 1, y + 1, 18, 6)); 
-        }
-    }
-}
-
 void init() {
     badger.init();
     badger.led(255);
@@ -435,8 +402,7 @@ void deinit(const char *message) {
 
     DEBUG_PRINTF("Going to sleep zZzZ\n");
     if (message) {
-        draw_status_bar(message);
-        draw_tiles(NULL, NULL);
+        draw_status_bar(badger, message);
         badger.update();
         badger.uc8151->busy_wait();
     }
@@ -479,55 +445,81 @@ int main() {
             piezo_play(piezo_notes_test_4, piezo_notes_test_4_len, false);
             init();
             tiles_make_tiles();
+            if (!wifi_up()) {
+                wifi_wait();
+            }
+            initialised = true;
+            current_screen = APP_SCREEN_TILES;
+            active_tile = NULL;
+            refresh_visible_tiles();
+            continue;
+        }
+
+        if (visible_refresh_active) {
+            continue;
         }
 
         char tiles_base_idx = tiles_get_base_idx();
 
-        TILE *tile = NULL; 
-        if(badger.pressed(badger.UP) || badger.pressed(badger.DOWN)) {
-            if (badger.pressed(badger.UP)) {
-                tiles_previous_column(click_count);
-            } else {
-                tiles_next_column(click_count);
+        if (current_screen == APP_SCREEN_TILES) {
+            if (badger.pressed(badger.UP) || badger.pressed(badger.DOWN)) {
+                if (badger.pressed(badger.UP)) {
+                    tiles_previous_column(click_count);
+                } else {
+                    tiles_next_column(click_count);
+                }
+                badger.pcf85063a->set_byte(tiles_get_column() + 1);
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                refresh_visible_tiles();
+                initialised = true;
+                continue;
             }
-            badger.pcf85063a->set_byte(tiles_get_column()+1);
-            badger.graphics->set_pen(15);
-            badger.graphics->clear();
-            draw_tiles(NULL, NULL);
-            draw_status_bar();
-            badger.update();
-            initialised = true;
-        } else {
-            for(uint i=0; i <  count_of(request_buttons); i++) {
+
+            TILE *tile = NULL;
+            for (uint i = 0; i < count_of(request_buttons); i++) {
                 if (!badger.pressed(request_buttons[i])) {
                     continue;
                 }
                 if (tiles_idx_in_bounds(tiles_base_idx + i)) {
                     tile = tile_array->tiles[tiles_base_idx + i];
-                } 
+                }
             }
-        }
 
-        if (!tile) {
+            if (!tile) {
+                continue;
+            }
+
+            active_tile = tile;
+            current_screen = APP_SCREEN_DETAIL;
+            badger.graphics->set_pen(15);
+            badger.graphics->clear();
+            render_current_screen();
+            initialised = true;
             continue;
         }
 
-        // User triggered a HTTP request, so we must wait for wifi if its not up yet
-        if (!wifi_up()) {
-            if (!initialised) {
-                piezo_play(piezo_notes_test_3, piezo_notes_test_3_len, true);
+        if (current_screen == APP_SCREEN_DETAIL && active_tile) {
+            if (badger.pressed(badger.UP)) {
+                restore_tiles_screen();
+                continue;
             }
-            wifi_wait();
-            piezo_stop();
+            if (badger.pressed(badger.DOWN)) {
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                refresh_tile_status(active_tile);
+                continue;
+            }
+            if (badger.pressed(badger.A)) {
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                request_tile_mode(active_tile);
+                continue;
+            }
         }
-
-        restful_request(restful_make_request(
-            tile,
-            tile_array->base_url,
-            (RESTFUL_REQUEST_DATA *)(tile->action_request),
-            (RESTFUL_REQUEST_DATA *)(tile->status_request),
-            restful_callback)
-        );
 
     }
     return 0;

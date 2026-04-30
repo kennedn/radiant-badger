@@ -46,10 +46,10 @@ typedef struct TCP_CLIENT_T_ {
     uint8_t buffer[BUF_SIZE];
     int buffer_len;
     int sent_len;
-    char base_url[20];
-    const char *method;
-    const char *endpoint;
-    const char *json_body;
+    char base_url[64];
+    char method[8];
+    char endpoint[128];
+    char json_body[128];
     HTTP_REQUEST_TYPE request_type;
     HTTP_TEMPERATURE_RESULT temperature_result;
     http_callback_t callback;
@@ -124,14 +124,15 @@ static void http_process_buffer(void *arg) {
     message_body++;
     DEBUG_PRINTF("http_message_body_parse message_body: %s\n", message_body);
 
-    // Extract current and target values
+    // Extract current, target and mode values
     if (!http_extract_simple_value(message_body, "current", state->temperature_result.current, sizeof(state->temperature_result.current)) ||
-        !http_extract_simple_value(message_body, "target", state->temperature_result.target, sizeof(state->temperature_result.target))) {
+        !http_extract_simple_value(message_body, "target", state->temperature_result.target, sizeof(state->temperature_result.target)) ||
+        !http_extract_simple_value(message_body, "mode", state->temperature_result.mode, sizeof(state->temperature_result.mode))) {
         state->callback(NULL, response_code, state->arg);
         return;
     }
 
-    DEBUG_PRINTF("http_message_body_parse current=%s target=%s\n", state->temperature_result.current, state->temperature_result.target);
+    DEBUG_PRINTF("http_message_body_parse current=%s target=%s mode=%s\n", state->temperature_result.current, state->temperature_result.target, state->temperature_result.mode);
     state->callback(&state->temperature_result, response_code, state->arg);
 }
 
@@ -312,9 +313,9 @@ static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, cons
         return NULL;
     }
     strncpy(state->base_url, url, count_of(state->base_url) - 1);
-    state->endpoint = endpoint;
-    state->method = method;
-    state->json_body = json_body;
+    strncpy(state->endpoint, endpoint, count_of(state->endpoint) - 1);
+    strncpy(state->method, method, count_of(state->method) - 1);
+    strncpy(state->json_body, json_body ? json_body : "", count_of(state->json_body) - 1);
     state->request_type = request_type;
 
     state->callback = callback;

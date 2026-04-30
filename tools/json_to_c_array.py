@@ -65,6 +65,11 @@ def main():
         append_string(buffer, request["endpoint"])
         append_string(buffer, request["json_body"])
 
+        mode_request = tile.get("mode_request", {"method": "", "endpoint": "", "json_body": ""})
+        append_string(buffer, mode_request["method"])
+        append_string(buffer, mode_request["endpoint"])
+        append_string(buffer, mode_request["json_body"])
+
     if args.wrap:
         print(f"static const char tiles_data[{len(buffer)}] = {{\n    {', '.join(str(b) for b in buffer)}\n}};")
     else:

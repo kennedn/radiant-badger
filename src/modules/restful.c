@@ -75,4 +75,5 @@ void restful_free_request_data(RESTFUL_REQUEST_DATA *request) {
     free(request->method);
     free(request->endpoint);
     free(request->json_body);
+    free(request);
 }

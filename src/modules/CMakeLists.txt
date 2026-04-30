@@ -5,4 +5,5 @@ target_sources(badger PRIVATE
     restful.c
     tiles.c
     piezo.c
+    screens.cpp
 )
