@@ -85,6 +85,19 @@ def main():
         append_string(buffer, boost_request["endpoint"])
         append_string(buffer, boost_request["json_body"])
 
+        schedule_request = tile.get("schedule_request", {"method": "", "endpoint": "", "json_body": "", "schedules": []})
+        append_string(buffer, schedule_request["method"])
+        append_string(buffer, schedule_request["endpoint"])
+        append_string(buffer, schedule_request["json_body"])
+        schedules = schedule_request.get("schedules", [])
+        buffer.append(len(schedules))
+        for s in schedules:
+            append_string(buffer, s)
+        schedule_status_request = tile.get("schedule_status_request", {"method": "", "endpoint": "", "json_body": ""})
+        append_string(buffer, schedule_status_request["method"])
+        append_string(buffer, schedule_status_request["endpoint"])
+        append_string(buffer, schedule_status_request["json_body"])
+
     if args.wrap:
         print(f"static const char tiles_data[{len(buffer)}] = {{\n    {', '.join(str(b) for b in buffer)}\n}};")
     else:

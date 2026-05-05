@@ -64,14 +64,17 @@ static bool http_extract_simple_value(const char *message_body, const char *key,
     char search_key[64];
     snprintf(search_key, sizeof(search_key), "\"%s\":", key);
 
+    // Safely search within a reasonable limit to avoid scanning beyond actual JSON
+    const char *search_limit = message_body + 2000;  // Prevent unbounded search
     char *token = strstr(message_body, search_key);
-    if (!token) {
+    if (!token || token > search_limit) {
         return false;
     }
 
     token += strlen(search_key);
     int out = 0;
-    while (*token && out < value_len - 1) {
+    // Add bounds checking: stop if we've scanned too far or hit null terminator
+    while (*token && out < value_len - 1 && token < search_limit) {
         if (*token == '"') {
             token++;
             continue;
@@ -104,7 +107,7 @@ static void http_process_buffer(void *arg) {
     int response_code = atoi(++message_body);
 
     // For non-temperature request types, just return the response code
-    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR && state->request_type != REQUEST_TYPE_RADIATOR_BATTERY) {
+    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR && state->request_type != REQUEST_TYPE_RADIATOR_BATTERY && state->request_type != REQUEST_TYPE_BOILER_SCHEDULE) {
         state->callback(NULL, response_code, state->arg);
         return;
     }
@@ -122,6 +125,14 @@ static void http_process_buffer(void *arg) {
         return;
     }
     message_body++;
+    
+    // Bounds check: ensure message_body pointer is within the buffer
+    if (message_body < (char *)state->buffer || message_body >= (char *)state->buffer + state->buffer_len) {
+        DEBUG_PRINTF("message_body out of bounds, aborting\n");
+        state->callback(NULL, response_code, state->arg);
+        return;
+    }
+    
     DEBUG_PRINTF("http_message_body_parse message_body: %s\n", message_body);
 
     if (state->request_type == REQUEST_TYPE_RADIATOR_BATTERY) {
@@ -130,6 +141,16 @@ static void http_process_buffer(void *arg) {
             return;
         }
         DEBUG_PRINTF("http_message_body_parse battery=%s\n", state->temperature_result.battery);
+        state->callback(&state->temperature_result, response_code, state->arg);
+        return;
+    }
+
+    if (state->request_type == REQUEST_TYPE_BOILER_SCHEDULE) {
+        if (!http_extract_simple_value(message_body, "schedule", state->temperature_result.schedule, sizeof(state->temperature_result.schedule))) {
+            state->callback(NULL, response_code, state->arg);
+            return;
+        }
+        DEBUG_PRINTF("http_message_body_parse schedule=%s\n", state->temperature_result.schedule);
         state->callback(&state->temperature_result, response_code, state->arg);
         return;
     }

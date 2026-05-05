@@ -20,6 +20,20 @@
                 "method": "POST",
                 "endpoint": "/v2/thermostat",
                 "json_body": "{\"code\":\"heatTemp\",\"value\":%d}"
+            },
+            "schedule_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator",
+                "json_body": "{\"hosts\":\"office,bedroom,kitchen,livingroom\",\"code\":\"schedule\",\"value\":\"%s\"}",
+                "schedules": [
+                    "default",
+                    "study"
+                ]
+            },
+            "schedule_status_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator",
+                "json_body": "{\"hosts\":\"office,bedroom,kitchen,livingroom\",\"code\":\"status\"}"
             }
         },
         "tile_b": {
@@ -94,6 +108,20 @@
                 "method": "POST",
                 "endpoint": "/v2/thermostat",
                 "json_body": "{\"code\":\"heatTemp\",\"value\":%d}"
+            },
+            "schedule_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator",
+                "json_body": "{\"hosts\":\"office,bedroom,kitchen,livingroom\",\"code\":\"schedule\",\"value\":\"%s\"}",
+                "schedules": [
+                    "default",
+                    "study"
+                ]
+            },
+            "schedule_status_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator",
+                "json_body": "{\"hosts\":\"office,bedroom,kitchen,livingroom\",\"code\":\"status\"}"
             }
         },
         "tile_b": {

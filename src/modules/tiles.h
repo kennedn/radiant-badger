@@ -17,12 +17,19 @@ typedef struct TILE_ {
     RESTFUL_REQUEST_DATA *battery_request;
     RESTFUL_REQUEST_DATA *target_request;
     RESTFUL_REQUEST_DATA *boost_request;
+    RESTFUL_REQUEST_DATA *schedule_request;
+    RESTFUL_REQUEST_DATA *schedule_status_request;
     uint8_t type;
     uint8_t mode;
     uint16_t target_temp;
     char *battery_value;
     char *boost_status_value;
     char *boost_value;
+    // Schedule support for boiler tiles
+    char **schedules;
+    uint8_t schedule_count;
+    char *schedule_status_value;
+    char *schedule_value;
     char *current_value;
     char *target_value;
 } TILE;

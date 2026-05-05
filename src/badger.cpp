@@ -47,6 +47,7 @@ enum APP_SCREEN {
     APP_SCREEN_TILES = 0,
     APP_SCREEN_DETAIL = 1,
     APP_SCREEN_BOOST = 2,
+    APP_SCREEN_SCHEDULE = 3,
 };
 
 static APP_SCREEN current_screen = APP_SCREEN_TILES;
@@ -61,6 +62,7 @@ void restful_callback(void *result, int status_code, void *arg);
 static void mode_update_callback(void *result, int status_code, void *arg);
 static void boiler_target_update_callback(void *result, int status_code, void *arg);
 static void boost_update_callback(void *result, int status_code, void *arg);
+static void schedule_update_callback(void *result, int status_code, void *arg);
 static void render_current_screen();
 static void refresh_tile_status(TILE *tile);
 static void refresh_visible_tiles();
@@ -69,6 +71,9 @@ static void request_boiler_target_toggle(TILE *tile);
 static void request_tile_boost_edit(TILE *tile);
 static void request_tile_boost_submit(TILE *tile);
 static void set_tile_boost_value(TILE *tile, int value);
+static void request_tile_schedule_edit(TILE *tile);
+static void request_tile_schedule_submit(TILE *tile);
+static void set_tile_schedule_index(TILE *tile, int index);
 static void restore_tiles_screen();
 static void refresh_tile_detail(TILE *tile);
 
@@ -103,6 +108,8 @@ static void render_current_screen() {
         draw_tile_detail(badger, active_tile);
     } else if (current_screen == APP_SCREEN_BOOST) {
         draw_tile_boost(badger, active_tile);
+    } else if (current_screen == APP_SCREEN_SCHEDULE) {
+        draw_tile_schedule(badger, active_tile);
     } else {
         draw_tiles(badger, NULL, NULL);
     }
@@ -217,6 +224,44 @@ static void set_tile_boost_value(TILE *tile, int value) {
     strcpy(tile->boost_value, value_str);
 }
 
+static void set_tile_schedule_index(TILE *tile, int index) {
+    if (!tile) {
+        return;
+    }
+    if (tile->schedule_count == 0) {
+        return;
+    }
+    if (index < 0) {
+        index = 0;
+    }
+    if (index >= tile->schedule_count) {
+        index = tile->schedule_count - 1;
+    }
+
+    char value_str[8];
+    snprintf(value_str, sizeof(value_str), "%d", index);
+    free(tile->schedule_value);
+    tile->schedule_value = (char *)malloc(strlen(value_str) + 1);
+    strcpy(tile->schedule_value, value_str);
+}
+
+static int get_tile_schedule_index(TILE *tile) {
+    if (!tile || !tile->schedule_value || !tile->schedule_value[0]) {
+        return 0;
+    }
+    int value = atoi(tile->schedule_value);
+    if (value < 0) {
+        return 0;
+    }
+    if (tile->schedule_count == 0) {
+        return 0;
+    }
+    if (value >= tile->schedule_count) {
+        return tile->schedule_count - 1;
+    }
+    return value;
+}
+
 static int get_tile_boost_value(TILE *tile) {
     if (!tile || !tile->boost_value || !tile->boost_value[0]) {
         return 0;
@@ -242,6 +287,16 @@ static void request_tile_boost_edit(TILE *tile) {
     render_current_screen();
 }
 
+static void request_tile_schedule_edit(TILE *tile) {
+    if (!tile || tile->type != TILE_TYPE_BOILER || !tile->schedule_request) {
+        return;
+    }
+
+    set_tile_schedule_index(tile, 0);
+    current_screen = APP_SCREEN_SCHEDULE;
+    render_current_screen();
+}
+
 static void request_tile_boost_submit(TILE *tile) {
     if (!tile || tile->type != TILE_TYPE_RADIATOR || !tile->boost_request) {
         return;
@@ -256,6 +311,47 @@ static void request_tile_boost_submit(TILE *tile) {
         NULL,
         boost_value,
         boost_update_callback));
+}
+
+static void request_tile_schedule_submit(TILE *tile) {
+    if (!tile || tile->type != TILE_TYPE_BOILER || !tile->schedule_request) {
+        return;
+    }
+
+    int idx = get_tile_schedule_index(tile);
+    const char *selected = "";
+    if (tile->schedules && tile->schedule_count > 0 && idx >= 0 && idx < tile->schedule_count) {
+        selected = tile->schedules[idx];
+    }
+
+    char resolved[128];
+    if (tile->schedule_request && tile->schedule_request->json_body) {
+        snprintf(resolved, sizeof(resolved), tile->schedule_request->json_body, selected);
+    } else {
+        resolved[0] = '\0';
+    }
+
+    char *method = NULL;
+    char *endpoint = NULL;
+    char *body = NULL;
+    if (tile->schedule_request && tile->schedule_request->method) {
+        method = (char *)malloc(strlen(tile->schedule_request->method) + 1);
+        strcpy(method, tile->schedule_request->method);
+    }
+    if (tile->schedule_request && tile->schedule_request->endpoint) {
+        endpoint = (char *)malloc(strlen(tile->schedule_request->endpoint) + 1);
+        strcpy(endpoint, tile->schedule_request->endpoint);
+    }
+    body = (char *)malloc(strlen(resolved) + 1);
+    strcpy(body, resolved);
+
+    RESTFUL_REQUEST_DATA *tmp = restful_make_request_data(method, endpoint, body);
+    RESTFUL_REQUEST *req = restful_make_request(tile, tile_array->base_url, tmp, NULL, NULL, -1, schedule_update_callback);
+    if (req) {
+        restful_request(req);
+    } else {
+        restful_free_request_data(tmp);
+    }
 }
 
 static void refresh_tile_detail(TILE *tile) {
@@ -285,10 +381,17 @@ void restful_callback(void *result, int status_code, void *arg) {
     DEBUG_PRINTF("restful_callback: status_code=%d, caller=%s, tile_type=%u\n", status_code, tile->name, tile->type);
 
     // Free any existing dynamic strings in tile
-    for (auto v : {tile->current_value, tile->target_value, tile->boost_status_value}) {
-        if (!v) { continue; }
-        free(v);
-        v = NULL;
+    if (tile->current_value) {
+        free(tile->current_value);
+        tile->current_value = NULL;
+    }
+    if (tile->target_value) {
+        free(tile->target_value);
+        tile->target_value = NULL;
+    }
+    if (tile->boost_status_value) {
+        free(tile->boost_status_value);
+        tile->boost_status_value = NULL;
     }
     if (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR) {
         if (status_code == 200 && result) {
@@ -409,6 +512,40 @@ static void boost_update_callback(void *result, int status_code, void *arg) {
     }
 
     if (current_screen == APP_SCREEN_BOOST && active_tile == tile) {
+        render_current_screen();
+    }
+}
+
+static void schedule_update_callback(void *result, int status_code, void *arg) {
+    (void)result;
+    if (!arg) {
+        return;
+    }
+
+    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
+    TILE *tile = (TILE *)request->tile;
+    if (!tile) {
+        if (request->action_request) {
+            restful_free_request_data(request->action_request);
+        }
+        restful_free_request(request);
+        return;
+    }
+
+    if (request->action_request) {
+        // Free the temporary action_request created in submit
+        restful_free_request_data(request->action_request);
+    }
+
+    restful_free_request(request);
+
+    if (status_code == 200) {
+        current_screen = APP_SCREEN_DETAIL;
+        refresh_tile_detail(tile);
+        return;
+    }
+
+    if (current_screen == APP_SCREEN_SCHEDULE && active_tile == tile) {
         render_current_screen();
     }
 }
@@ -703,15 +840,12 @@ int main() {
                 if (active_tile->type == TILE_TYPE_RADIATOR) {
                     request_tile_boost_edit(active_tile);
                 } else {
-                    request_tile_mode(active_tile);
+                    if (active_tile->schedule_request) {
+                        request_tile_schedule_edit(active_tile);
+                    } else {
+                        request_tile_mode(active_tile);
+                    }
                 }
-                continue;
-            }
-            if (badger.pressed(badger.B) && active_tile->type == TILE_TYPE_BOILER) {
-                if (!wifi_up()) {
-                    wifi_wait();
-                }
-                request_boiler_target_toggle(active_tile);
                 continue;
             }
         }
@@ -740,6 +874,37 @@ int main() {
                     wifi_wait();
                 }
                 request_tile_boost_submit(active_tile);
+                continue;
+            }
+        }
+
+        if (current_screen == APP_SCREEN_SCHEDULE && active_tile) {
+            if (badger.pressed(badger.UP)) {
+                current_screen = APP_SCREEN_DETAIL;
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                refresh_tile_detail(active_tile);
+                continue;
+            }
+            if (badger.pressed(badger.B)) {
+                // decrement schedule index by click_count
+                int idx = get_tile_schedule_index(active_tile) - click_count;
+                set_tile_schedule_index(active_tile, idx);
+                render_current_screen();
+                continue;
+            }
+            if (badger.pressed(badger.C)) {
+                int idx = get_tile_schedule_index(active_tile) + click_count;
+                set_tile_schedule_index(active_tile, idx);
+                render_current_screen();
+                continue;
+            }
+            if (badger.pressed(badger.A)) {
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                request_tile_schedule_submit(active_tile);
                 continue;
             }
         }
