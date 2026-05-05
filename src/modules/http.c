@@ -142,6 +142,10 @@ static void http_process_buffer(void *arg) {
         return;
     }
 
+    // Optional boost timestamp (ISO8601), may be absent
+    if (!http_extract_simple_value(message_body, "boost", state->temperature_result.boost, sizeof(state->temperature_result.boost))) {
+        state->temperature_result.boost[0] = '\0';
+    }
     DEBUG_PRINTF("http_message_body_parse current=%s target=%s mode=%s\n", state->temperature_result.current, state->temperature_result.target, state->temperature_result.mode);
     state->callback(&state->temperature_result, response_code, state->arg);
 }

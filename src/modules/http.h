@@ -13,6 +13,7 @@ typedef struct {
     char target[32];
     char mode[32];
     char battery[32];
+    char boost[32];
 } HTTP_TEMPERATURE_RESULT;
 
 typedef void (*http_callback_t)(void *result, int response_code, void *arg);

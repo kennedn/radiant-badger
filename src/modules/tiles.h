@@ -16,11 +16,15 @@ typedef struct TILE_ {
     RESTFUL_REQUEST_DATA *status_request;
     RESTFUL_REQUEST_DATA *battery_request;
     RESTFUL_REQUEST_DATA *target_request;
+    RESTFUL_REQUEST_DATA *boost_request;
     uint8_t type;
     uint8_t mode;
     uint16_t target_temp;
     char *battery_value;
-    char *display_value;
+    char *boost_status_value;
+    char *boost_value;
+    char *current_value;
+    char *target_value;
 } TILE;
 
 enum TILE_TYPE {

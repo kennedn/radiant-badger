@@ -80,6 +80,11 @@ def main():
         append_string(buffer, target_request["endpoint"])
         append_string(buffer, target_request["json_body"])
 
+        boost_request = tile.get("boost_request", {"method": "", "endpoint": "", "json_body": ""})
+        append_string(buffer, boost_request["method"])
+        append_string(buffer, boost_request["endpoint"])
+        append_string(buffer, boost_request["json_body"])
+
     if args.wrap:
         print(f"static const char tiles_data[{len(buffer)}] = {{\n    {', '.join(str(b) for b in buffer)}\n}};")
     else:

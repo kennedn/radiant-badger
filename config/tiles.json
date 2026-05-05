@@ -1,7 +1,7 @@
 [
     {
-        "heading": "Up",
-        "icon_idx": 0,
+        "heading": "UP",
+        "icon_idx": 4,
         "tile_a": {
             "name": "BOILER",
             "type": 0,
@@ -40,6 +40,11 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/office",
                 "json_body": "{\"code\": \"battery\"}"
+            },
+            "boost_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/office",
+                "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
             }
         },
         "tile_c": {
@@ -60,12 +65,17 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/bedroom",
                 "json_body": "{\"code\": \"battery\"}"
+            },
+            "boost_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/bedroom",
+                "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
             }
         }
     },
     {
-        "heading": "Down",
-        "icon_idx": 0,
+        "heading": "DOWN",
+        "icon_idx": 4,
         "tile_a": {
             "name": "BOILER",
             "type": 0,
@@ -104,6 +114,11 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/livingroom",
                 "json_body": "{\"code\": \"battery\"}"
+            },
+            "boost_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/livingroom",
+                "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
             }
         },
         "tile_c": {
@@ -124,6 +139,11 @@
                 "method": "POST",
                 "endpoint": "/v2/radiator/kitchen",
                 "json_body": "{\"code\": \"battery\"}"
+            },
+            "boost_request": {
+                "method": "POST",
+                "endpoint": "/v2/radiator/kitchen",
+                "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
             }
         }
     }

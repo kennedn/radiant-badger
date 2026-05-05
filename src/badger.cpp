@@ -46,6 +46,7 @@ static volatile bool initialised = false;
 enum APP_SCREEN {
     APP_SCREEN_TILES = 0,
     APP_SCREEN_DETAIL = 1,
+    APP_SCREEN_BOOST = 2,
 };
 
 static APP_SCREEN current_screen = APP_SCREEN_TILES;
@@ -59,11 +60,15 @@ void deinit(const char *message = NULL);
 void restful_callback(void *result, int status_code, void *arg);
 static void mode_update_callback(void *result, int status_code, void *arg);
 static void boiler_target_update_callback(void *result, int status_code, void *arg);
+static void boost_update_callback(void *result, int status_code, void *arg);
 static void render_current_screen();
 static void refresh_tile_status(TILE *tile);
 static void refresh_visible_tiles();
 static void request_tile_mode(TILE *tile);
 static void request_boiler_target_toggle(TILE *tile);
+static void request_tile_boost_edit(TILE *tile);
+static void request_tile_boost_submit(TILE *tile);
+static void set_tile_boost_value(TILE *tile, int value);
 static void restore_tiles_screen();
 static void refresh_tile_detail(TILE *tile);
 
@@ -96,6 +101,8 @@ static void render_current_screen() {
 
     if (current_screen == APP_SCREEN_DETAIL) {
         draw_tile_detail(badger, active_tile);
+    } else if (current_screen == APP_SCREEN_BOOST) {
+        draw_tile_boost(badger, active_tile);
     } else {
         draw_tiles(badger, NULL, NULL);
     }
@@ -192,6 +199,65 @@ static void request_boiler_target_toggle(TILE *tile) {
         boiler_target_update_callback));
 }
 
+static void set_tile_boost_value(TILE *tile, int value) {
+    if (!tile) {
+        return;
+    }
+
+    if (value < 0) {
+        value = 0;
+    } else if (value > 23) {
+        value = 23;
+    }
+
+    char value_str[8];
+    snprintf(value_str, sizeof(value_str), "%d", value);
+    free(tile->boost_value);
+    tile->boost_value = (char *)malloc(strlen(value_str) + 1);
+    strcpy(tile->boost_value, value_str);
+}
+
+static int get_tile_boost_value(TILE *tile) {
+    if (!tile || !tile->boost_value || !tile->boost_value[0]) {
+        return 0;
+    }
+
+    int value = atoi(tile->boost_value);
+    if (value < 0) {
+        return 0;
+    }
+    if (value > 23) {
+        return 23;
+    }
+    return value;
+}
+
+static void request_tile_boost_edit(TILE *tile) {
+    if (!tile || tile->type != TILE_TYPE_RADIATOR || !tile->boost_request) {
+        return;
+    }
+
+    set_tile_boost_value(tile, 0);
+    current_screen = APP_SCREEN_BOOST;
+    render_current_screen();
+}
+
+static void request_tile_boost_submit(TILE *tile) {
+    if (!tile || tile->type != TILE_TYPE_RADIATOR || !tile->boost_request) {
+        return;
+    }
+
+    int boost_value = get_tile_boost_value(tile);
+    restful_request(restful_make_request(
+        tile,
+        tile_array->base_url,
+        tile->boost_request,
+        NULL,
+        NULL,
+        boost_value,
+        boost_update_callback));
+}
+
 static void refresh_tile_detail(TILE *tile) {
     if (!tile) {
         return;
@@ -218,25 +284,36 @@ void restful_callback(void *result, int status_code, void *arg) {
 
     DEBUG_PRINTF("restful_callback: status_code=%d, caller=%s, tile_type=%u\n", status_code, tile->name, tile->type);
 
-    if (status_code != 200) {
-        if (tile->display_value) {
-            free(tile->display_value);
-            tile->display_value = NULL;
-        }
-    } else if (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR) {
-        if (result) {
+    // Free any existing dynamic strings in tile
+    for (auto v : {tile->current_value, tile->target_value, tile->boost_status_value}) {
+        if (!v) { continue; }
+        free(v);
+        v = NULL;
+    }
+    if (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR) {
+        if (status_code == 200 && result) {
             HTTP_TEMPERATURE_RESULT *temp_result = (HTTP_TEMPERATURE_RESULT *)result;
-            char display[70];
+            char buffer[128];
             float current = strtof(temp_result->current, NULL) / 10.0f;
+            snprintf(buffer, sizeof(buffer), "%.1f", current);
+            tile->current_value = (char *)malloc(strlen(buffer) + 1);
+            strncpy(tile->current_value, buffer, strlen(buffer) + 1);
+
             float target = strtof(temp_result->target, NULL) / 10.0f;
-            snprintf(display, sizeof(display), "%.1f/%.1f", current, target);
+            snprintf(buffer, sizeof(buffer), "%.1f", target);
+            tile->target_value = (char *)malloc(strlen(buffer) + 1);
+            strncpy(tile->target_value, buffer, strlen(buffer) + 1);
+
             tile->mode = (uint8_t)atoi(temp_result->mode);
             tile->target_temp = (uint16_t)atoi(temp_result->target);
-            
-            if (display[0] != '\0') {
-                free(tile->display_value);
-                tile->display_value = (char *)malloc(strlen(display) + 1);
-                strcpy(tile->display_value, display);
+            // Copy optional boost timestamp into tile->boost_status_value
+            if (temp_result->boost[0]) {
+                free(tile->boost_status_value);
+                tile->boost_status_value = (char *)malloc(strlen(temp_result->boost) + 1);
+                strcpy(tile->boost_status_value, temp_result->boost);
+            } else {
+                free(tile->boost_status_value);
+                tile->boost_status_value = NULL;
             }
         }
     }
@@ -306,6 +383,32 @@ static void boiler_target_update_callback(void *result, int status_code, void *a
 
     restful_free_request(request);
     if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
+        render_current_screen();
+    }
+}
+
+static void boost_update_callback(void *result, int status_code, void *arg) {
+    (void)result;
+    if (!arg) {
+        return;
+    }
+
+    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
+    TILE *tile = (TILE *)request->tile;
+    if (!tile) {
+        restful_free_request(request);
+        return;
+    }
+
+    restful_free_request(request);
+
+    if (status_code == 200) {
+        current_screen = APP_SCREEN_DETAIL;
+        refresh_tile_detail(tile);
+        return;
+    }
+
+    if (current_screen == APP_SCREEN_BOOST && active_tile == tile) {
         render_current_screen();
     }
 }
@@ -597,7 +700,11 @@ int main() {
                 if (!wifi_up()) {
                     wifi_wait();
                 }
-                request_tile_mode(active_tile);
+                if (active_tile->type == TILE_TYPE_RADIATOR) {
+                    request_tile_boost_edit(active_tile);
+                } else {
+                    request_tile_mode(active_tile);
+                }
                 continue;
             }
             if (badger.pressed(badger.B) && active_tile->type == TILE_TYPE_BOILER) {
@@ -605,6 +712,34 @@ int main() {
                     wifi_wait();
                 }
                 request_boiler_target_toggle(active_tile);
+                continue;
+            }
+        }
+
+        if (current_screen == APP_SCREEN_BOOST && active_tile) {
+            if (badger.pressed(badger.UP)) {
+                current_screen = APP_SCREEN_DETAIL;
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                refresh_tile_detail(active_tile);
+                continue;
+            }
+            if (badger.pressed(badger.B)) {
+                set_tile_boost_value(active_tile, get_tile_boost_value(active_tile) - click_count);
+                render_current_screen();
+                continue;
+            }
+            if (badger.pressed(badger.C)) {
+                set_tile_boost_value(active_tile, get_tile_boost_value(active_tile) + click_count);
+                render_current_screen();
+                continue;
+            }
+            if (badger.pressed(badger.A)) {
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                request_tile_boost_submit(active_tile);
                 continue;
             }
         }

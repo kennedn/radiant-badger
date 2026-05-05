@@ -34,12 +34,16 @@ void tiles_free() {
     }
 
     for (int i = 0; i < tile_array->used; i++) {
-        free(tile_array->tiles[i]->display_value);
+        free(tile_array->tiles[i]->current_value);
+        free(tile_array->tiles[i]->target_value);
         free(tile_array->tiles[i]->battery_value);
+        free(tile_array->tiles[i]->boost_status_value);
+        free(tile_array->tiles[i]->boost_value);
         restful_free_request_data(tile_array->tiles[i]->mode_request);
         restful_free_request_data(tile_array->tiles[i]->status_request);
         restful_free_request_data(tile_array->tiles[i]->battery_request);
         restful_free_request_data(tile_array->tiles[i]->target_request);
+        restful_free_request_data(tile_array->tiles[i]->boost_request);
         free(tile_array->tiles[i]->name);
         free(tile_array->tiles[i]);
     }
@@ -60,7 +64,7 @@ void tiles_free() {
     DEBUG_PRINTF("tiles_free: %ld us\n", (long)(to_us_since_boot(get_absolute_time()) - sw_time));
 }
 
-void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, RESTFUL_REQUEST_DATA *target_request, uint8_t type) {
+void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, RESTFUL_REQUEST_DATA *target_request, RESTFUL_REQUEST_DATA *boost_request, uint8_t type) {
     TILE *tile = (TILE *)malloc(sizeof(TILE));
 
     tile->name = name;
@@ -70,12 +74,16 @@ void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_re
     tile->status_request = status_request;
     tile->battery_request = battery_request;
     tile->target_request = target_request;
+    tile->boost_request = boost_request;
     tile->type = type;
     // Use 0xFF to indicate "mode not set" (valid modes are 0-4)
     tile->mode = 0xFF;
     tile->target_temp = 0xFFFF;
     tile->battery_value = NULL;
-    tile->display_value = NULL;
+    tile->boost_status_value = NULL;
+    tile->boost_value = NULL;
+    tile->current_value = NULL;
+    tile->target_value = NULL;
 
     if (!tile_array) {
         free(tile);
@@ -163,6 +171,9 @@ void tiles_make_tiles() {
     char *target_method;
     char *target_endpoint;
     char *target_json_body;
+    char *boost_method;
+    char *boost_endpoint;
+    char *boost_json_body;
     uint8_t type;
     int ptr = 0;
 
@@ -190,7 +201,7 @@ void tiles_make_tiles() {
         if (tiles_data[ptr] == 0) {
             ptr++;
             // This is a padding tile
-            tiles_add_tile(NULL, 0, NULL, NULL, NULL, NULL, 0);
+            tiles_add_tile(NULL, 0, NULL, NULL, NULL, NULL, NULL, 0);
             continue;
         }
         ptr += tiles_make_str(&name, (char *)&tiles_data[ptr]);
@@ -209,13 +220,17 @@ void tiles_make_tiles() {
         ptr += tiles_make_str(&target_method, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&target_endpoint, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&target_json_body, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&boost_method, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&boost_endpoint, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&boost_json_body, (char *)&tiles_data[ptr]);
 
         status_request = restful_make_request_data(method, endpoint, json_body);
         RESTFUL_REQUEST_DATA *mode_request = restful_make_request_data(mode_method, mode_endpoint, mode_json_body);
         battery_request = restful_make_request_data(battery_method, battery_endpoint, battery_json_body);
         target_request = restful_make_request_data(target_method, target_endpoint, target_json_body);
+        RESTFUL_REQUEST_DATA *boost_request = restful_make_request_data(boost_method, boost_endpoint, boost_json_body);
 
-        tiles_add_tile(name, image_idx, mode_request, status_request, battery_request, target_request, type);
+        tiles_add_tile(name, image_idx, mode_request, status_request, battery_request, target_request, boost_request, type);
     }
     DEBUG_PRINTF("tiles_make_tiles: %ld us\n", (long)(to_us_since_boot(get_absolute_time()) - sw_time));
 }
