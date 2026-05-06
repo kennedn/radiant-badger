@@ -1,7 +1,7 @@
 # radiant-badger
 Interface for controlling smart radiators and thermostats on the Badger 2040 W
 
-![](./media/demo.gif)
+![](./media/demo2.gif)
 
 ## LiPo Charge Mod
 
