@@ -1,5 +1,5 @@
-# restful-badger
-Interface for interacting with RESTful APIs on the Badger 2040 W
+# radiant-badger
+Interface for controlling smart radiators and thermostats on the Badger 2040 W
 
 ![](./media/demo.gif)
 
@@ -78,51 +78,80 @@ Additional definitions have default values that can be overridden:
 
 ## JSON file
 
-A JSON file is required to render an array of tiles in restfulBadger. It's default location is `PROJECT_ROOT/config/tiles.json`. Each tile consists of:
+A JSON file is required to define columns and tiles in radiant-badger. It's default location is `PROJECT_ROOT/config/tiles.json`.
+
+The file contains an array of columns. Each column contains up to 3 tiles (tile_a, tile_b, tile_c) that are displayed on the screen, and can be navigated with UP/DOWN buttons.
+
+### Column
+
+| Key      | Description                                                   |
+|----------|---------------------------------------------------------------|
+| heading  | Display name for the column (e.g., "UP", "DOWN")              |
+| icon_idx | Index of icon to display from [image_tiles[]](/src/images.h#54) |
+| tile_a   | Left tile definition (required)                               |
+| tile_b   | Center tile definition (optional)                             |
+| tile_c   | Right tile definition (optional)                              |
 
 ### Tile
 
-| Key                        | Description                                   |
-|----------------------------|-----------------------------------------------|
-| name                       | Tile name, shown under the tiles icon         |
-| image_idx                  | Index of icon to display from [image_tiles[]](/src/images.h#54) |
-| action_request             | **Optional** Initial HTTP request without response checking   |
-| status_request             | **Optional** Secondary HTTP request with response checking   |
-
-#### Example
-
-```json
-{
-    "name": "office",
-    "image_idx": 0,
-    "action_request": {},
-    "status_request": {}
-}
-```
-
+| Key                     | Type   | Description                                                      |
+|-------------------------|--------|------------------------------------------------------------------|
+| name                    | string | Tile name, shown under the tile icon                             |
+| type                    | number | 0 = BOILER, 1 = RADIATOR                                         |
+| image_idx               | number | Index of icon to display                                         |
+| status_request          | object | HTTP request to fetch current tile status                        |
+| mode_request            | object | **Optional** HTTP request to change mode (BOILER only)           |
+| target_request          | object | **Optional** HTTP request to change target temp (BOILER only)    |
+| battery_request         | object | **Optional** HTTP request to fetch battery (RADIATOR only)       |
+| boost_request           | object | **Optional** HTTP request to set boost (RADIATOR only)           |
+| schedule_request        | object | **Optional** HTTP request to change schedule (BOILER only)       |
+| schedule_status_request | object | **Optional** HTTP request to fetch schedule (BOILER only)        |
 
 ### HTTP Request
 
-| Key                        | Description                                   |
-|----------------------------|-----------------------------------------------|
-| method                     | HTTP method                                   |
-| endpoint                   | HTTP URL Endpoint, appended to API_SERVER     |
-| json_body                  | JSON string to send to the endpoint           |
-| key                        | Key of the value to extract from the HTTP response         |
-| on_value                   | Compared with key value, produces a tick mark |
-| off_value                  | Compared with key value, produces a cross mark |
+| Key       | Description                                         |
+|-----------|-----------------------------------------------------|
+| method    | HTTP method (POST or GET)                           |
+| endpoint  | HTTP URL endpoint, appended to API_SERVER           |
+| json_body | JSON string with optional %d or %s format specifiers|
+| schedules | Optional array of schedule names                    |
 
-
-#### Example
+#### Example Column
 
 ```json
 {
-    "method": "POST",
-    "endpoint": "/v2/meross/office",
-    "json_body": "{\"code\": \"status\"}",
-    "key": "onoff",
-    "on_value": "1",
-    "off_value": "0"
+    "heading": "UP",
+    "icon_idx": 4,
+    "tile_a": {
+        "name": "BOILER",
+        "type": 0,
+        "image_idx": 13,
+        "status_request": {
+            "method": "POST",
+            "endpoint": "/v2/thermostat",
+            "json_body": "{\"code\": \"status\"}"
+        },
+        "boost_request": {
+            "method": "POST",
+            "endpoint": "/v2/thermostat",
+            "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
+        }
+    },
+    "tile_b": {
+        "name": "OFFICE",
+        "type": 1,
+        "image_idx": 14,
+        "status_request": {
+            "method": "POST",
+            "endpoint": "/v2/radiator/office",
+            "json_body": "{\"code\": \"status\"}"
+        },
+        "boost_request": {
+            "method": "POST",
+            "endpoint": "/v2/radiator/office",
+            "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
+        }
+    }
 }
 ```
 
@@ -131,8 +160,8 @@ A JSON file is required to render an array of tiles in restfulBadger. It's defau
 Clone Repo and cd:
 
 ```bash
-git clone https://github.com/kennedn/restful-badger
-cd restful-badger
+git clone https://github.com/kennedn/radiant-badger
+cd radiant-badger
 ```
 Configure the JSON file at `PROJECT_ROOT/config/tiles.json`
 

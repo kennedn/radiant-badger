@@ -63,7 +63,7 @@ static void mode_update_callback(void *result, int status_code, void *arg);
 static void boiler_target_update_callback(void *result, int status_code, void *arg);
 static void boost_update_callback(void *result, int status_code, void *arg);
 static void schedule_update_callback(void *result, int status_code, void *arg);
-static void render_current_screen();
+static void render_current_screen(const char *message = NULL);
 static void refresh_tile_status(TILE *tile);
 static void refresh_visible_tiles();
 static void request_tile_mode(TILE *tile);
@@ -76,6 +76,7 @@ static void request_tile_schedule_submit(TILE *tile);
 static void set_tile_schedule_index(TILE *tile, int index);
 static void restore_tiles_screen();
 static void refresh_tile_detail(TILE *tile);
+void wifi_wait();
 
 void ntp_callback(datetime_t *datetime, void *arg) {
     if (datetime == NULL) {
@@ -100,7 +101,7 @@ void ntp_callback(datetime_t *datetime, void *arg) {
     ntp_time_set = true;
 }
 
-static void render_current_screen() {
+static void render_current_screen(const char *message) {
     badger.graphics->set_pen(15);
     badger.graphics->clear();
 
@@ -115,7 +116,7 @@ static void render_current_screen() {
     }
 
     // Always draw status bar last so it overlays all other UI elements.
-    draw_status_bar(badger, NULL);
+    draw_status_bar(badger, message);
     badger.update();
     badger.uc8151->busy_wait();
 }
@@ -155,7 +156,7 @@ static void refresh_visible_tiles() {
     if (visible_refresh_pending == 0) {
         visible_refresh_active = false;
         if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
-            render_current_screen();
+            render_current_screen(NULL);
         }
     }
 }
@@ -165,7 +166,11 @@ static void restore_tiles_screen() {
     active_tile = NULL;
     badger.graphics->set_pen(15);
     badger.graphics->clear();
-    render_current_screen();
+
+    if (!wifi_up()) {
+        wifi_wait();
+    }
+    refresh_visible_tiles();
 }
 
 static void request_tile_mode(TILE *tile) {
@@ -231,14 +236,13 @@ static void set_tile_schedule_index(TILE *tile, int index) {
     if (tile->schedule_count == 0) {
         return;
     }
+
+    index %= tile->schedule_count;
     if (index < 0) {
-        index = 0;
-    }
-    if (index >= tile->schedule_count) {
-        index = tile->schedule_count - 1;
+        index += tile->schedule_count;
     }
 
-    char value_str[8];
+    char value_str[16];
     snprintf(value_str, sizeof(value_str), "%d", index);
     free(tile->schedule_value);
     tile->schedule_value = (char *)malloc(strlen(value_str) + 1);
@@ -284,7 +288,7 @@ static void request_tile_boost_edit(TILE *tile) {
 
     set_tile_boost_value(tile, 0);
     current_screen = APP_SCREEN_BOOST;
-    render_current_screen();
+    render_current_screen(NULL);
 }
 
 static void request_tile_schedule_edit(TILE *tile) {
@@ -294,7 +298,7 @@ static void request_tile_schedule_edit(TILE *tile) {
 
     set_tile_schedule_index(tile, 0);
     current_screen = APP_SCREEN_SCHEDULE;
-    render_current_screen();
+    render_current_screen(NULL);
 }
 
 static void request_tile_boost_submit(TILE *tile) {
@@ -400,12 +404,12 @@ void restful_callback(void *result, int status_code, void *arg) {
             float current = strtof(temp_result->current, NULL) / 10.0f;
             snprintf(buffer, sizeof(buffer), "%.1f", current);
             tile->current_value = (char *)malloc(strlen(buffer) + 1);
-            strncpy(tile->current_value, buffer, strlen(buffer) + 1);
+            strcpy(tile->current_value, buffer);
 
             float target = strtof(temp_result->target, NULL) / 10.0f;
             snprintf(buffer, sizeof(buffer), "%.1f", target);
             tile->target_value = (char *)malloc(strlen(buffer) + 1);
-            strncpy(tile->target_value, buffer, strlen(buffer) + 1);
+            strcpy(tile->target_value, buffer);
 
             tile->mode = (uint8_t)atoi(temp_result->mode);
             tile->target_temp = (uint16_t)atoi(temp_result->target);
@@ -428,7 +432,7 @@ void restful_callback(void *result, int status_code, void *arg) {
         if (visible_refresh_pending == 0) {
             visible_refresh_active = false;
             if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
-                render_current_screen();
+                render_current_screen(NULL);
             }
         }
         restful_free_request(request);
@@ -436,7 +440,7 @@ void restful_callback(void *result, int status_code, void *arg) {
     }
 
     if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
-        render_current_screen();
+        render_current_screen(NULL);
     }
 
     restful_free_request(request);
@@ -462,7 +466,7 @@ static void mode_update_callback(void *result, int status_code, void *arg) {
     }
 
     restful_free_request(request);
-    render_current_screen();
+    render_current_screen(NULL);
 }
 
 static void boiler_target_update_callback(void *result, int status_code, void *arg) {
@@ -486,7 +490,7 @@ static void boiler_target_update_callback(void *result, int status_code, void *a
 
     restful_free_request(request);
     if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
-        render_current_screen();
+        render_current_screen(NULL);
     }
 }
 
@@ -512,7 +516,7 @@ static void boost_update_callback(void *result, int status_code, void *arg) {
     }
 
     if (current_screen == APP_SCREEN_BOOST && active_tile == tile) {
-        render_current_screen();
+        render_current_screen(NULL);
     }
 }
 
@@ -546,7 +550,7 @@ static void schedule_update_callback(void *result, int status_code, void *arg) {
     }
 
     if (current_screen == APP_SCREEN_SCHEDULE && active_tile == tile) {
-        render_current_screen();
+        render_current_screen(NULL);
     }
 }
 
@@ -617,10 +621,10 @@ void wifi_wait() {
     bool led = true;
     while(!wifi_up()) {
         if (halt_initiated) {
-            deinit("Sleeping");
+            deinit("SLEEPING");
         }
         if (attempts > WIFI_CONNECT_ATTEMPTS) {
-            deinit("No WiFi");
+            deinit("NO WIFI");
         }
         // Retry wifi connect if link status is in error
         if ((sw_timer == 0 || (to_ms_since_boot(get_absolute_time()) - sw_timer) > WIFI_STATUS_POLL_MS) && cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA) <= 0) {
@@ -646,7 +650,7 @@ char wait_for_button_press_release() {
         while(!(gpio_get_all() & mask)) {
             // timer callback has asked for a halt
             if (halt_initiated) {
-                deinit("Sleeping");
+                deinit("SLEEPING");
             }
             // Allow a grace period before returning to record subsequent clicks
             if (counter > 0 && (to_ms_since_boot(get_absolute_time()) - sw_timer) > MULTI_CLICK_WAIT_MS) {
@@ -724,9 +728,8 @@ void deinit(const char *message) {
 
     DEBUG_PRINTF("Going to sleep zZzZ\n");
     if (message) {
-        draw_status_bar(badger, message);
-        badger.update();
-        badger.uc8151->busy_wait();
+        restore_tiles_screen();
+        render_current_screen(message);
     }
     if(initialised) {
         cyw43_arch_deinit();
@@ -848,6 +851,13 @@ int main() {
                 }
                 continue;
             }
+            if (badger.pressed(badger.B) && active_tile->type == TILE_TYPE_BOILER) {
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                request_boiler_target_toggle(active_tile);
+                continue;
+            }
         }
 
         if (current_screen == APP_SCREEN_BOOST && active_tile) {
@@ -860,13 +870,13 @@ int main() {
                 continue;
             }
             if (badger.pressed(badger.B)) {
-                set_tile_boost_value(active_tile, get_tile_boost_value(active_tile) - click_count);
-                render_current_screen();
+                set_tile_boost_value(active_tile, get_tile_boost_value(active_tile) + click_count);
+                render_current_screen(NULL);
                 continue;
             }
             if (badger.pressed(badger.C)) {
-                set_tile_boost_value(active_tile, get_tile_boost_value(active_tile) + click_count);
-                render_current_screen();
+                set_tile_boost_value(active_tile, get_tile_boost_value(active_tile) - click_count);
+                render_current_screen(NULL);
                 continue;
             }
             if (badger.pressed(badger.A)) {
@@ -888,16 +898,16 @@ int main() {
                 continue;
             }
             if (badger.pressed(badger.B)) {
-                // decrement schedule index by click_count
-                int idx = get_tile_schedule_index(active_tile) - click_count;
+                int idx = get_tile_schedule_index(active_tile) + click_count;
                 set_tile_schedule_index(active_tile, idx);
-                render_current_screen();
+                render_current_screen(NULL);
                 continue;
             }
             if (badger.pressed(badger.C)) {
-                int idx = get_tile_schedule_index(active_tile) + click_count;
+                // decrement schedule index by click_count
+                int idx = get_tile_schedule_index(active_tile) - click_count;
                 set_tile_schedule_index(active_tile, idx);
-                render_current_screen();
+                render_current_screen(NULL);
                 continue;
             }
             if (badger.pressed(badger.A)) {

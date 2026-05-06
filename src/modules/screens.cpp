@@ -104,18 +104,20 @@ static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool s
         powerPercent = power_percent(&voltage);
         sprintf(percentStr, "%d%%", powerPercent);
     }
+    
+    if (show_heading) {
+        heading_icon = (uint8_t *)tiles_get_heading()->icon;
+    }
 
     if (title) {
         snprintf(clock_str, sizeof(clock_str), "%s", title);
+        wifi_image = (uint8_t *)image_status_sleeping;
     } else {
         if(!wifi_up()) {
             wifi_image = (uint8_t *)image_status_wifi_off;
         }
         rtc_get_datetime(&datetime);
         snprintf(clock_str, sizeof(clock_str), "%02d:%02d\n", datetime.hour, datetime.min);
-        if (show_heading) {
-            heading_icon = (uint8_t *)tiles_get_heading()->icon;
-        }
     }
     clock_x_offset = badger.graphics->measure_text(clock_str, 2.0f) / 2;
 
@@ -129,7 +131,7 @@ static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool s
         badger.graphics->text(tiles_get_heading()->heading, Point(image_status_size + x_pad * 2, 3), WIDTH, 2.0f);
         badger.image(heading_icon, Rect(x_pad, 2, image_status_size, image_status_size));
     } else if (!title) {
-        badger.graphics->text("restfulBadger", Point(x_pad, 6), WIDTH, 1.0f);
+        badger.graphics->text("radiantBadger", Point(x_pad, 6), WIDTH, 1.0f);
     }
     badger.image(battery_image, Rect(WIDTH - status_x_offset - (image_status_size + x_pad), 2, image_status_size, image_status_size));
     badger.image(wifi_image, Rect(WIDTH - status_x_offset - (image_status_size + x_pad) * 2, 2, image_status_size, image_status_size));
@@ -298,18 +300,18 @@ void draw_tile_detail(pimoroni::Badger2040W &badger, TILE *tile) {
         badger.graphics->text(line, Point(tile_pad_x * 2, HEIGHT - text_offset - 18), label_width, scale);
     } else {
         snprintf(line, sizeof(line), "SCHEDULE");
-        badger.graphics->text(line, Point(tile_pad_x * 2, HEIGHT - text_offset * 2 - 18), label_width, scale);
+        badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, HEIGHT - text_offset * 2 - 18), label_width, scale);
         if (tile->schedule_status_value && tile->schedule_status_value[0]) {
             snprintf(line, sizeof(line), "%s", tile->schedule_status_value);
         } else {
             snprintf(line, sizeof(line), "--");
         }
-        badger.graphics->text(line, Point(tile_pad_x * 2, HEIGHT - text_offset - 18), label_width, scale);
+        badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, HEIGHT - text_offset - 18), label_width, scale);
     }
     badger.graphics->set_font("bitmap8");
 
-    const char* radiator_labels[] = { "Boost", "", "" };
-    const char* boiler_labels[] = { "Schedule", "", "" };
+    const char* radiator_labels[] = { "BOOST", "", "" };
+    const char* boiler_labels[] = { "SCHEDULE", "TOGGLE", "" };
     const char **labels = (tile->type == TILE_TYPE_RADIATOR) ? radiator_labels : boiler_labels;
     for (int i = 0; i < 3; ++i) {
         auto t = labels[i];
@@ -387,14 +389,14 @@ void draw_tile_boost(pimoroni::Badger2040W &badger, TILE *tile) {
     // Row 1 Column 2: Current label and value
     badger.graphics->set_font("bitmap8");
     snprintf(line, sizeof(line), "CURRENT");
-    badger.graphics->text(line, Point(tile_pad_x, tile_pad_y), label_width, scale);
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, tile_pad_y), label_width, scale);
     badger.graphics->set_font("bitmap8");
     if (tile->current_value) {
         snprintf(line, sizeof(line), "%s", tile->current_value);
     } else {
         snprintf(line, sizeof(line), "--");
     }
-    badger.graphics->text(line, Point(tile_pad_x, tile_pad_y + text_offset), label_width, scale);
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, tile_pad_y + text_offset), label_width, scale);
 
     // Row 1 Column 3: Target label and value
     badger.graphics->set_font("bitmap8");
@@ -411,13 +413,13 @@ void draw_tile_boost(pimoroni::Badger2040W &badger, TILE *tile) {
     // Row 2 Column 2: Battery label and value
     if (tile->type == TILE_TYPE_RADIATOR) {
         snprintf(line, sizeof(line), "BATTERY");
-        badger.graphics->text(line, Point(tile_pad_x, HEIGHT - text_offset * 2 - 18), label_width, scale);
+        badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, HEIGHT - text_offset * 2 - 18), label_width, scale);
         if (tile->battery_value && tile->battery_value[0]) {
             snprintf(line, sizeof(line), "%s%%", tile->battery_value);
         } else {
             snprintf(line, sizeof(line), "--");
         }
-        badger.graphics->text(line, Point(tile_pad_x, HEIGHT - text_offset - 18), label_width, scale);
+        badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, HEIGHT - text_offset - 18), label_width, scale);
     }
 
     // Row 2 Column 3: Boost label and value
@@ -439,7 +441,7 @@ void draw_tile_boost(pimoroni::Badger2040W &badger, TILE *tile) {
     }
     badger.graphics->set_font("bitmap8");
 
-    const char* boost_labels[] = { "Ok ", "+", "  -" };
+    const char* boost_labels[] = { "OK ", "+", "  -" };
     for (int i = 0; i < 3; ++i) {
         const char *t = boost_labels[i];
         scale = (i == 0) ? 2.0f : 3.0f;
@@ -501,14 +503,14 @@ void draw_tile_schedule(pimoroni::Badger2040W &badger, TILE *tile) {
     // Row 1 Column 2: Current label and value
     badger.graphics->set_font("bitmap8");
     snprintf(line, sizeof(line), "CURRENT");
-    badger.graphics->text(line, Point(tile_pad_x, tile_pad_y), label_width, scale);
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, tile_pad_y), label_width, scale);
     badger.graphics->set_font("bitmap8");
     if (tile->current_value) {
         snprintf(line, sizeof(line), "%s", tile->current_value);
     } else {
         snprintf(line, sizeof(line), "--");
     }
-    badger.graphics->text(line, Point(tile_pad_x, tile_pad_y + text_offset), label_width, scale);
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, tile_pad_y + text_offset), label_width, scale);
 
     // Row 1 Column 3: Target label and value
     badger.graphics->set_font("bitmap8");
@@ -537,16 +539,16 @@ void draw_tile_schedule(pimoroni::Badger2040W &badger, TILE *tile) {
     // Row 2 Column 3: Schedule label and value
     badger.graphics->set_font("bitmap8");
     snprintf(line, sizeof(line), "SCHEDULE");
-    badger.graphics->text(line, Point(tile_pad_x * 2, HEIGHT - text_offset * 2 - 18), label_width, scale);
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, HEIGHT - text_offset * 2 - 18), label_width, scale);
     if (tile->schedules && tile->schedule_count > 0 && schedule_index >= 0 && schedule_index < tile->schedule_count) {
         snprintf(line, sizeof(line), "%s", tile->schedules[schedule_index]);
     } else {
         snprintf(line, sizeof(line), "--");
     }
-    badger.graphics->text(line, Point(tile_pad_x * 2, HEIGHT - text_offset - 18), label_width, scale);
+    badger.graphics->text(line, Point(tile_pad_x + tile_offset / 2, HEIGHT - text_offset - 18), label_width, scale);
     badger.graphics->set_font("bitmap8");
 
-    const char* boost_labels[] = { "Ok ", "+", "  -" };
+    const char* boost_labels[] = { "OK ", "+", "  -" };
     for (int i = 0; i < 3; ++i) {
         const char *t = boost_labels[i];
         scale = (i == 0) ? 2.0f : 3.0f;
