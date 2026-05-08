@@ -51,9 +51,10 @@ typedef struct TCP_CLIENT_T_ {
     const char *endpoint;
     const char *json_body;
     HTTP_REQUEST_TYPE request_type;
-    HTTP_TEMPERATURE_RESULT temperature_result;
+    HTTP_REQUEST_RESULT temperature_result;
     http_callback_t callback;
     void *arg;
+    const char *extract_key;
 } TCP_CLIENT_T;
 
 static bool http_extract_simple_value(const char *message_body, const char *key, char *value, int value_len) {
@@ -107,7 +108,7 @@ static void http_process_buffer(void *arg) {
     int response_code = atoi(++message_body);
 
     // For non-temperature request types, just return the response code
-    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR && state->request_type != REQUEST_TYPE_RADIATOR_BATTERY && state->request_type != REQUEST_TYPE_BOILER_SCHEDULE) {
+    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR && state->request_type != REQUEST_TYPE_RADIATOR_BATTERY && state->request_type != REQUEST_TYPE_BOILER_SCHEDULE && state->request_type != REQUEST_TYPE_RESTFUL) {
         state->callback(NULL, response_code, state->arg);
         return;
     }
@@ -134,6 +135,18 @@ static void http_process_buffer(void *arg) {
     }
     
     DEBUG_PRINTF("http_message_body_parse message_body: %s\n", message_body);
+
+    if (state->request_type == REQUEST_TYPE_RESTFUL) {
+        if (state->extract_key && state->extract_key[0]) {
+            if (!http_extract_simple_value(message_body, state->extract_key, state->temperature_result.value, sizeof(state->temperature_result.value))) {
+                state->callback(NULL, response_code, state->arg);
+                return;
+            }
+            DEBUG_PRINTF("http_message_body_parse restful value=%s\n", state->temperature_result.value);
+        }
+        state->callback(&state->temperature_result, response_code, state->arg);
+        return;
+    }
 
     if (state->request_type == REQUEST_TYPE_RADIATOR_BATTERY) {
         if (!http_extract_simple_value(message_body, "value", state->temperature_result.battery, sizeof(state->temperature_result.battery))) {
@@ -340,8 +353,8 @@ static void tcp_dns_found(const char *hostname, const ip_addr_t *ipaddr, void *a
     }
 }
 
-// Perform initialisation
-static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg) {
+// Perform initialisation with optional key extraction
+static TCP_CLIENT_T *tcp_client_init_with_key(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg, const char *extract_key) {
     TCP_CLIENT_T *state = calloc(1, sizeof(TCP_CLIENT_T));
     if (!state) {
         DEBUG_PRINTF("failed to allocate state\n");
@@ -352,6 +365,7 @@ static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, cons
     state->method = method;
     state->json_body = json_body;
     state->request_type = request_type;
+    state->extract_key = extract_key;
 
     state->callback = callback;
     state->arg = arg;
@@ -359,7 +373,11 @@ static TCP_CLIENT_T *tcp_client_init(const char *url, const char *endpoint, cons
 }
 
 void http_request(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg) {
-    TCP_CLIENT_T *state = tcp_client_init(url, endpoint, method, json_body, request_type, callback, arg);
+    http_request_with_key(url, endpoint, method, json_body, request_type, callback, arg, NULL);
+}
+
+void http_request_with_key(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg, const char *extract_key) {
+    TCP_CLIENT_T *state = tcp_client_init_with_key(url, endpoint, method, json_body, request_type, callback, arg, extract_key);
     if (!state) {
         return;
     }

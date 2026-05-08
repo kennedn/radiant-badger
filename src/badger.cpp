@@ -125,14 +125,33 @@ static void refresh_tile_status(TILE *tile) {
     if (!tile || !tile->status_request) {
         return;
     }
-    restful_request(restful_make_request(
+
+    RESTFUL_REQUEST *request = restful_make_request(
         tile,
         tile_array->base_url,
         NULL,
         tile->status_request,
         NULL,
         -1,
-        restful_callback));
+        restful_callback);
+    if (!request) {
+        return;
+    }
+
+    if (tile->type == TILE_TYPE_RESTFUL) {
+        http_request_with_key(
+            request->base_url,
+            tile->status_request->endpoint,
+            tile->status_request->method,
+            tile->status_request->json_body,
+            REQUEST_TYPE_RESTFUL,
+            restful_callback,
+            request,
+            tile->status_key);
+        return;
+    }
+
+    restful_request(request);
 }
 
 static void refresh_visible_tiles() {
@@ -384,6 +403,11 @@ void restful_callback(void *result, int status_code, void *arg) {
 
     DEBUG_PRINTF("restful_callback: status_code=%d, caller=%s, tile_type=%u\n", status_code, tile->name, tile->type);
 
+    // Store HTTP status code for rendering
+    if (tile) {
+        tile->http_status_code = status_code;
+    }
+
     // Free any existing dynamic strings in tile
     if (tile->current_value) {
         free(tile->current_value);
@@ -397,9 +421,20 @@ void restful_callback(void *result, int status_code, void *arg) {
         free(tile->boost_status_value);
         tile->boost_status_value = NULL;
     }
-    if (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR) {
+    if (tile->type == TILE_TYPE_RESTFUL) {
         if (status_code == 200 && result) {
-            HTTP_TEMPERATURE_RESULT *temp_result = (HTTP_TEMPERATURE_RESULT *)result;
+            HTTP_REQUEST_RESULT *temp_result = (HTTP_REQUEST_RESULT *)result;
+            free(tile->status_value);
+            tile->status_value = (char *)malloc(strlen(temp_result->value) + 1);
+            strcpy(tile->status_value, temp_result->value);
+            DEBUG_PRINTF("restful_callback: restful status_value=%s\n", tile->status_value);
+        } else {
+            free(tile->status_value);
+            tile->status_value = NULL;
+        }
+    } else if (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR) {
+        if (status_code == 200 && result) {
+            HTTP_REQUEST_RESULT *temp_result = (HTTP_REQUEST_RESULT *)result;
             char buffer[128];
             float current = strtof(temp_result->current, NULL) / 10.0f;
             snprintf(buffer, sizeof(buffer), "%.1f", current);
@@ -437,6 +472,10 @@ void restful_callback(void *result, int status_code, void *arg) {
         }
         restful_free_request(request);
         return;
+    }
+
+    if (tile && tile->type == TILE_TYPE_RESTFUL && current_screen == APP_SCREEN_TILES && active_tile == tile) {
+        render_current_screen(NULL);
     }
 
     if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
@@ -817,6 +856,23 @@ int main() {
             }
 
             active_tile = tile;
+            
+            // For RESTFUL tiles, just trigger the action/status callback chain
+            if (tile->type == TILE_TYPE_RESTFUL) {
+                if (!wifi_up()) {
+                    wifi_wait();
+                }
+                restful_request(restful_make_request(
+                    tile,
+                    tile_array->base_url,
+                    tile->action_request,
+                    tile->status_request,
+                    NULL,
+                    -1,
+                    restful_callback));
+                continue;
+            }
+            
             current_screen = APP_SCREEN_DETAIL;
             // Defer rendering until after status/battery requests complete.
             refresh_tile_detail(active_tile);

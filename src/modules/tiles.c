@@ -18,6 +18,9 @@ uint8_t tile_column;
 static const char tiles_data[] = {
     TILES_DATA};
 
+static void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, RESTFUL_REQUEST_DATA *target_request, RESTFUL_REQUEST_DATA *boost_request, uint8_t type);
+static void tiles_add_tile_full(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *action_request, RESTFUL_REQUEST_DATA *mode_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, RESTFUL_REQUEST_DATA *target_request, RESTFUL_REQUEST_DATA *boost_request, uint8_t type, char *status_key, char *status_on_value, char *status_off_value);
+
 void tiles_init(const char *base_url, char size) {
     tile_array = (TILES *)malloc(sizeof(TILES));
     tile_array->base_url = (char *)malloc(strlen(base_url) + 1 * sizeof(char));
@@ -39,12 +42,17 @@ void tiles_free() {
         free(tile_array->tiles[i]->battery_value);
         free(tile_array->tiles[i]->boost_status_value);
         free(tile_array->tiles[i]->boost_value);
+        free(tile_array->tiles[i]->status_value);
+        free(tile_array->tiles[i]->status_key);
+        free(tile_array->tiles[i]->status_on_value);
+        free(tile_array->tiles[i]->status_off_value);
         if (tile_array->tiles[i]->schedules) {
             for (int s = 0; s < tile_array->tiles[i]->schedule_count; s++) {
                 free(tile_array->tiles[i]->schedules[s]);
             }
             free(tile_array->tiles[i]->schedules);
         }
+        restful_free_request_data(tile_array->tiles[i]->action_request);
         restful_free_request_data(tile_array->tiles[i]->mode_request);
         restful_free_request_data(tile_array->tiles[i]->status_request);
         restful_free_request_data(tile_array->tiles[i]->battery_request);
@@ -73,11 +81,16 @@ void tiles_free() {
 }
 
 void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, RESTFUL_REQUEST_DATA *target_request, RESTFUL_REQUEST_DATA *boost_request, uint8_t type) {
+    tiles_add_tile_full(name, image_idx, NULL, mode_request, status_request, battery_request, target_request, boost_request, type, NULL, NULL, NULL);
+}
+
+void tiles_add_tile_full(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *action_request, RESTFUL_REQUEST_DATA *mode_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, RESTFUL_REQUEST_DATA *target_request, RESTFUL_REQUEST_DATA *boost_request, uint8_t type, char *status_key, char *status_on_value, char *status_off_value) {
     TILE *tile = (TILE *)malloc(sizeof(TILE));
 
     tile->name = name;
 
     tile->image = (char *)image_tiles[image_idx];
+    tile->action_request = action_request;
     tile->mode_request = mode_request;
     tile->status_request = status_request;
     tile->battery_request = battery_request;
@@ -87,6 +100,9 @@ void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_re
     tile->schedule_status_request = NULL;
     tile->schedules = NULL;
     tile->schedule_count = 0;
+    tile->status_key = status_key;
+    tile->status_on_value = status_on_value;
+    tile->status_off_value = status_off_value;
     tile->schedule_status_value = NULL;
     tile->schedule_value = NULL;
     tile->type = type;
@@ -96,8 +112,10 @@ void tiles_add_tile(char *name, uint8_t image_idx, RESTFUL_REQUEST_DATA *mode_re
     tile->battery_value = NULL;
     tile->boost_status_value = NULL;
     tile->boost_value = NULL;
+    tile->status_value = NULL;
     tile->current_value = NULL;
     tile->target_value = NULL;
+    tile->http_status_code = -1;
 
     if (!tile_array) {
         free(tile);
@@ -173,9 +191,15 @@ void tiles_make_tiles() {
     RESTFUL_REQUEST_DATA *target_request;
     HEADING *heading;
     char *name;
+    char *action_method;
+    char *action_endpoint;
+    char *action_json_body;
     char *method;
     char *endpoint;
     char *json_body;
+    char *status_key;
+    char *status_on_value;
+    char *status_off_value;
     char *mode_method;
     char *mode_endpoint;
     char *mode_json_body;
@@ -230,9 +254,15 @@ void tiles_make_tiles() {
 
         char image_idx = tiles_data[ptr++];
         type = tiles_data[ptr++];
+        ptr += tiles_make_str(&action_method, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&action_endpoint, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&action_json_body, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&method, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&endpoint, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&json_body, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&status_key, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&status_on_value, (char *)&tiles_data[ptr]);
+        ptr += tiles_make_str(&status_off_value, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&mode_method, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&mode_endpoint, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&mode_json_body, (char *)&tiles_data[ptr]);
@@ -261,6 +291,8 @@ void tiles_make_tiles() {
         ptr += tiles_make_str(&schedule_status_endpoint, (char *)&tiles_data[ptr]);
         ptr += tiles_make_str(&schedule_status_json_body, (char *)&tiles_data[ptr]);
 
+    // Only create action_request if method is not empty (i.e., for RESTFUL tiles)
+    RESTFUL_REQUEST_DATA *action_request = (action_method && action_method[0]) ? restful_make_request_data(action_method, action_endpoint, action_json_body) : NULL;
         status_request = restful_make_request_data(method, endpoint, json_body);
         RESTFUL_REQUEST_DATA *mode_request = restful_make_request_data(mode_method, mode_endpoint, mode_json_body);
         battery_request = restful_make_request_data(battery_method, battery_endpoint, battery_json_body);
@@ -269,7 +301,7 @@ void tiles_make_tiles() {
         RESTFUL_REQUEST_DATA *schedule_request = restful_make_request_data(schedule_method, schedule_endpoint, schedule_json_body);
         RESTFUL_REQUEST_DATA *schedule_status_request = restful_make_request_data(schedule_status_method, schedule_status_endpoint, schedule_status_json_body);
 
-        tiles_add_tile(name, image_idx, mode_request, status_request, battery_request, target_request, boost_request, type);
+        tiles_add_tile_full(name, image_idx, action_request, mode_request, status_request, battery_request, target_request, boost_request, type, status_key, status_on_value, status_off_value);
         // Attach schedule_request, schedule_status_request and schedules to the last added tile
         TILE *last_tile = tile_array->tiles[tile_array->used - 1];
         last_tile->schedule_request = schedule_request;

@@ -57,13 +57,25 @@ def main():
         append_string(buffer, tile["name"])
         buffer.append(tile["image_idx"])
 
-        # Numeric type: 0 = boiler, 1 = radiator
+        # Numeric type: 0 = boiler, 1 = radiator, 2 = restful
         buffer.append(int(tile.get("type", 0)))
 
-        request = tile["status_request"]
+        # Action request (for RESTFUL tiles)
+        action_request = tile.get("action_request", {"method": "", "endpoint": "", "json_body": ""})
+        append_string(buffer, action_request["method"])
+        append_string(buffer, action_request["endpoint"])
+        append_string(buffer, action_request["json_body"])
+
+        # Status request (shared across all tile types)
+        request = tile.get("status_request", {"method": "", "endpoint": "", "json_body": "", "key": "", "on_value": "", "off_value": ""})
         append_string(buffer, request["method"])
         append_string(buffer, request["endpoint"])
         append_string(buffer, request["json_body"])
+
+        # RESTFUL status extraction fields
+        append_string(buffer, request.get("key", ""))
+        append_string(buffer, request.get("on_value", ""))
+        append_string(buffer, request.get("off_value", ""))
 
         mode_request = tile.get("mode_request", {"method": "", "endpoint": "", "json_body": ""})
         append_string(buffer, mode_request["method"])

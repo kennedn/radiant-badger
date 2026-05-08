@@ -174,5 +174,103 @@
                 "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
             }
         }
+    },
+    {
+        "heading": "UP",
+        "icon_idx": 0,
+        "tile_a": {
+            "name": "OFFICE",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/office",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/office",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_b": {
+            "name": "BEDROOM",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/bedroom",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/bedroom",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_c": {
+            "name": "HALL UP",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/hall_up",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/hall_up",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        }
+    },
+    {
+        "heading": "DEVICES",
+        "icon_idx": 1,
+        "tile_a": {
+            "name": "PC STAT",
+            "type": 2,
+            "image_idx": 4,
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/wol/pc",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "data",
+                "on_value": "on",
+                "off_value": "off"
+            }
+        },
+        "tile_b": {
+            "name": "SHIT STAT",
+            "type": 2,
+            "image_idx": 4,
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/wol/shitcube",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "data",
+                "on_value": "on",
+                "off_value": "off"
+            }
+        },
+        "tile_c": {
+            "name": "PHONE",
+            "type": 2,
+            "image_idx": 12,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/alert",
+                "json_body": "{\"message\": \"find_phone\", \"title\": \"Tasker\", \"priority\": \"1\"}"
+            }
+        }
     }
 ]

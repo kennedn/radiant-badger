@@ -92,7 +92,7 @@ static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool s
     char status_x_offset = 0;
     char x_pad = 4;
     int32_t clock_x_offset;
-    uint8_t *wifi_image = (uint8_t *)image_status_wifi_on;
+    uint8_t *wifi_image = (uint8_t *)image_icon_wifi_on;
     uint8_t *battery_image = (uint8_t *)image_status_battery_charging;
     uint8_t *heading_icon = NULL;
 
@@ -114,7 +114,7 @@ static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool s
         wifi_image = (uint8_t *)image_status_sleeping;
     } else {
         if(!wifi_up()) {
-            wifi_image = (uint8_t *)image_status_wifi_off;
+            wifi_image = (uint8_t *)image_icon_wifi_off;
         }
         rtc_get_datetime(&datetime);
         snprintf(clock_str, sizeof(clock_str), "%02d:%02d\n", datetime.hour, datetime.min);
@@ -181,13 +181,34 @@ void draw_tiles(pimoroni::Badger2040W &badger, const char *selected_name, const 
         badger.graphics->set_font("bitmap8");
 
         // Footer
-        if (tile->current_value && tile->target_value) {
+        if (tile->type == TILE_TYPE_RESTFUL) {
+            char status_text[8];
+            
+            // Check if we got a non-200 HTTP response (error case)
+            if (tile->http_status_code != 200 && tile->http_status_code != -1) {
+                snprintf(status_text, sizeof(status_text), "?");
+            } else if (!tile->status_value || !tile->status_value[0]) {
+                // No status value (no endpoint or not yet fetched)
+                snprintf(status_text, sizeof(status_text), "--");
+            } else if (tile->status_on_value && tile->status_off_value && !strcmp(tile->status_value, tile->status_on_value)) {
+                snprintf(status_text, sizeof(status_text), "ON");
+            } else if (tile->status_on_value && tile->status_off_value && !strcmp(tile->status_value, tile->status_off_value)) {
+                snprintf(status_text, sizeof(status_text), "OFF");
+            } else {
+                snprintf(status_text, sizeof(status_text), "?");
+            }
+            
+            badger.graphics->set_pen(15);
+            int32_t text_size = badger.graphics->measure_text(status_text, scale);
+            int32_t text_x_offset = (tile_pad_x - text_size) / 2;
+            badger.graphics->text(status_text, Point((tile_pad_x*i) + text_x_offset, HEIGHT - 20 + 3), tile_pad_x, scale);
+        } else if (tile->current_value && tile->target_value) {
             char display_value[128];
             snprintf(display_value, sizeof(display_value), "%s/%s", tile->current_value, tile->target_value);
             badger.graphics->set_pen(15);
-            name_size = badger.graphics->measure_text(display_value, scale);
-            name_x_offset = (tile_pad_x - name_size) /2 ;
-            badger.graphics->text(display_value, Point((tile_pad_x*i) + name_x_offset, HEIGHT - 20 + 3), tile_pad_x, scale);
+            int32_t text_size = badger.graphics->measure_text(display_value, scale);
+            int32_t text_x_offset = (tile_pad_x - text_size) / 2;
+            badger.graphics->text(display_value, Point((tile_pad_x*i) + text_x_offset, HEIGHT - 20 + 3), tile_pad_x, scale);
         }
         if(selected_name && !strcmp(selected_name, tile->name)) {
             badger.image((const uint8_t *)indicator_icon,
