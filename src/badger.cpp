@@ -6,6 +6,9 @@
 #include "pico/platform.h"
 #include "pico/stdlib.h"
 #include "hardware/pwm.h"
+#include "hardware/sync.h"
+#include "hardware/structs/ioqspi.h"
+#include "hardware/structs/sio.h"
 #include "pico/util/datetime.h"
 
 extern "C" {
@@ -29,6 +32,43 @@ extern "C" {
 using namespace pimoroni;
 
 Badger2040W badger;
+
+// BOOTSEL button detection function
+// Must disable flash access while checking button state
+bool __no_inline_not_in_flash_func(get_bootsel_button)() {
+    const uint CS_PIN_INDEX = 1;
+
+    // Must disable interrupts, as interrupt handlers may be in flash, and we
+    // are about to temporarily disable flash access!
+    uint32_t flags = save_and_disable_interrupts();
+
+    // Set chip select to Hi-Z
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_LOW << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+
+    // Note we can't call into any sleep functions in flash right now
+    for (volatile int i = 0; i < 1000; ++i);
+
+    // The HI GPIO registers in SIO can observe and control the 6 QSPI pins.
+    // Note the button pulls the pin *low* when pressed.
+#if PICO_RP2040
+    #define CS_BIT (1u << 1)
+#else
+    #define CS_BIT SIO_GPIO_HI_IN_QSPI_CSN_BITS
+#endif
+    bool button_state = !(sio_hw->gpio_hi_in & CS_BIT);
+
+    // Need to restore the state of chip select, else we are going to have a
+    // bad time when we return to code in flash!
+    hw_write_masked(&ioqspi_hw->io[CS_PIN_INDEX].ctrl,
+                    GPIO_OVERRIDE_NORMAL << IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_LSB,
+                    IO_QSPI_GPIO_QSPI_SS_CTRL_OEOVER_BITS);
+
+    restore_interrupts(flags);
+
+    return button_state;
+}
 
 // 12am daily alarm
 datetime_t ntp_daily_alarm = datetime_t{
@@ -680,13 +720,16 @@ void wifi_wait() {
     badger.led(255);
 }
 
-char wait_for_button_press_release() {
+int wait_for_button_press_release() {
     uint32_t mask = (1UL << badger.A) | (1UL << badger.B) | (1UL << badger.C) | (1UL << badger.UP) | (1UL << badger.DOWN);
     uint32_t sw_timer = to_ms_since_boot(get_absolute_time());
-    char counter = 0;
+    int counter = 0;
     while (true) {
         // Wait for button press
         while(!(gpio_get_all() & mask)) {
+            if (get_bootsel_button()) {
+                return -1;
+            }
             // timer callback has asked for a halt
             if (halt_initiated) {
                 deinit("SLEEPING");
@@ -802,8 +845,10 @@ int main() {
     alarm_id_t halt_timeout_id = -1;
     while(true) {
         halt_timeout_id = rearm_halt_timeout(halt_timeout_id);
+
+        
         // Wait for button press
-        char click_count = wait_for_button_press_release();
+        int click_count = wait_for_button_press_release();
 
         if (!initialised) {
             piezo_play(piezo_notes_test_4, piezo_notes_test_4_len, false);
@@ -820,6 +865,26 @@ int main() {
         }
 
         if (visible_refresh_active) {
+            continue;
+        }
+
+        // Check BOOTSEL button
+        if (click_count == -1) {
+            badger.led(0);
+            DEBUG_PRINTF("BOOTSEL button pressed, refreshing data\n");
+            while(click_count == -1) {
+                click_count = get_bootsel_button() ? -1 : 0;
+                sleep_ms(10);
+            }
+            badger.led(255);
+            if (!wifi_up()) {
+                wifi_wait();
+            }
+            if (current_screen == APP_SCREEN_TILES) {
+                refresh_visible_tiles();
+            } else if (current_screen == APP_SCREEN_DETAIL && active_tile) {
+                refresh_tile_detail(active_tile);
+            }
             continue;
         }
 
