@@ -41,7 +41,7 @@
 #define LINK_STATS 1
 // #define ETH_PAD_SIZE                2
 #define LWIP_CHKSUM_ALGORITHM 3
-#define LWIP_DHCP 0
+#define LWIP_DHCP 1
 #define LWIP_IPV4 1
 #define LWIP_TCP 1
 #define LWIP_UDP 1
@@ -85,12 +85,5 @@
 #define PPP_DEBUG LWIP_DBG_OFF
 #define SLIP_DEBUG LWIP_DBG_OFF
 #define DHCP_DEBUG LWIP_DBG_OFF
-
-#undef CYW43_DEFAULT_IP_STA_ADDRESS
-#undef CYW43_DEFAULT_IP_STA_GATEWAY
-#undef CYW43_DEFAULT_IP_DNS
-#define CYW43_DEFAULT_IP_STA_ADDRESS IP_ADDRESS   // set static ip
-#define CYW43_DEFAULT_IP_STA_GATEWAY IP_GATEWAY   // set static gateway
-#define CYW43_DEFAULT_IP_DNS IP_DNS               // set DNS
 
 #endif /* __LWIPOPTS_H__ */

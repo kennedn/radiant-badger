@@ -3,22 +3,6 @@ add_executable(badger)
 # Default definitions
 set(TZ "GMT0BST,M3.5.0/1,M10.5.0/2" CACHE STRING "Specify the explicit timezone string") # defualt is BST
 set(NTP_SERVER "pool.ntp.org" CACHE STRING "Specify the NTP server")
-set(IP_ADDRESS "192.168.1.204" CACHE STRING "Specify IP Address")
-set(IP_GATEWAY "192.168.1.1" CACHE STRING "Specify IP Gateway")
-set(IP_DNS "192.168.1.1" CACHE STRING "Specify IP DNS")
-set(DEBUG_PRINT 0 CACHE BOOL "Enables debug printf")
-
-# BSSID format
-string(REPLACE ":" ", 0x" BSSID_HEX "${WIFI_BSSID}")
-set(BSSID_FMT "(const uint8_t[]){ 0x${BSSID_HEX} }")
-
-# IP format
-string(REPLACE "." ", " IP_ADDRESS_FMT "${IP_ADDRESS}")
-string(REPLACE "." ", " IP_GATEWAY_FMT "${IP_GATEWAY}")
-string(REPLACE "." ", " IP_DNS_FMT "${IP_DNS}")
-set(IP_ADDRESS_FMT "LWIP_MAKEU32(${IP_ADDRESS_FMT})")
-set(IP_GATEWAY_FMT "LWIP_MAKEU32(${IP_GATEWAY_FMT})")
-set(IP_DNS_FMT "LWIP_MAKEU32(${IP_DNS_FMT})")
 
 set(JSON_FILEPATH "${PROJECT_SOURCE_DIR}/config/tiles.json" CACHE STRING "Location of tiles json")
 
@@ -28,15 +12,10 @@ target_compile_options(badger PRIVATE -Wall)
 target_compile_definitions(badger PRIVATE 
     WIFI_SSID=\"${WIFI_SSID}\"
     WIFI_PASSWORD=\"${WIFI_PASSWORD}\"
-    WIFI_BSSID=${BSSID_FMT}
-    WIFI_CHANNEL=${WIFI_CHANNEL}
     API_SERVER=\"${API_SERVER}\"
-
+    API_IP=\"${API_IP}\"
     TZ=\"${TZ}\"
     NTP_SERVER=\"${NTP_SERVER}\"
-    IP_ADDRESS=${IP_ADDRESS_FMT}
-    IP_GATEWAY=${IP_GATEWAY_FMT}
-    IP_DNS=${IP_DNS_FMT}
     TILES_DATA=${TILES_DATA}
     DEBUG_PRINT=${DEBUG_PRINT}
 )

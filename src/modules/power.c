@@ -42,7 +42,7 @@ void power_voltage(float *voltage_result) {
 
     vsys /= PICO_POWER_SAMPLE_COUNT;
     cyw43_thread_exit();
-    // Generate voltage
+    // ADC_VREF voltage (3.3v) divided by ADC resolution (12 bits)
     const float conversion_factor = 3.3f / (1 << 12);
     // ADC_VREF is connected to VSYS via a voltage divider, with ADC_VREF connected to VSYS via a 200k resistor and to ground via a 100k resistor
     // This effectivly performs a division by 3, so the voltage must be scaled by 3 to correct for this.

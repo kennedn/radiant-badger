@@ -18,7 +18,7 @@ typedef struct {
     char boost[32];
     char schedule[32];
     char value[128];
-} HTTP_REQUEST_RESULT;
+} HTTP_TEMPERATURE_RESULT;
 
 typedef void (*http_callback_t)(void *result, int response_code, void *arg);
 void http_request(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg);

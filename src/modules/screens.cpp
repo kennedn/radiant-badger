@@ -189,7 +189,7 @@ void draw_tiles(pimoroni::Badger2040W &badger, const char *selected_name, const 
                 snprintf(status_text, sizeof(status_text), "?");
             } else if (!tile->status_value || !tile->status_value[0]) {
                 // No status value (no endpoint or not yet fetched)
-                snprintf(status_text, sizeof(status_text), "--");
+                status_text[0] = '\0';
             } else if (tile->status_on_value && tile->status_off_value && !strcmp(tile->status_value, tile->status_on_value)) {
                 snprintf(status_text, sizeof(status_text), "ON");
             } else if (tile->status_on_value && tile->status_off_value && !strcmp(tile->status_value, tile->status_off_value)) {
@@ -216,18 +216,25 @@ void draw_tiles(pimoroni::Badger2040W &badger, const char *selected_name, const 
         }
     }
     DEBUG_PRINTF("current column: %d, max: %d\n", tiles_get_column(), tiles_max_column());
-    char current_col = tiles_get_column() % 5;
-    char last_10s_col = tiles_max_column() - tiles_max_column() % 5;
-    char max_col = (tiles_get_column() < last_10s_col) ? 5 : tiles_max_column() % 5;
-    char total_height = max_col * 14;
-    char start_y = (HEIGHT / 2) - (total_height / 2);
-    for (char i=0; i < max_col; i++) {
+    char total_columns = tiles_max_column();
+    char current_column = tiles_get_column();
+    char pad = 1;  // Vertical padding between rects
+    
+    // Calculate square height to fit all columns in available space (between header and footer)
+    char available_height = HEIGHT - 40;  // Between y=20 and y=HEIGHT-20
+    char square_height = (available_height - (total_columns - 1) * pad) / total_columns;  // Account for gaps
+    if (square_height < 4) square_height = 4;  // Minimum height
+    
+    char total_height = total_columns * square_height + (total_columns - 1) * pad;  // Include gaps
+    char start_y = 20 + ((available_height - total_height) / 2);  // Center within safe area
+    
+    for (char i = 0; i < total_columns; i++) {
         badger.graphics->set_pen(0);
-        char y = start_y + (i * 14);
-        badger.graphics->rectangle(Rect(WIDTH - 10, y, 20, 12));
-        if (current_col != i) {
+        char y = start_y + (i * (square_height + pad));  // +pad for gap
+        badger.graphics->rectangle(Rect(WIDTH - 10, y, 18, square_height));
+        if (current_column != i){
             badger.graphics->set_pen(15);
-            badger.graphics->rectangle(Rect(WIDTH - 10 + 1, y + 1, 18, 10));
+            badger.graphics->rectangle(Rect(WIDTH - 10 + 1, y + 1, 16, square_height - 2));
         }
     }
 }

@@ -234,6 +234,181 @@
         }
     },
     {
+        "heading": "UP",
+        "icon_idx": 0,
+        "tile_a": {
+            "name": "BATHROOM",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/bathroom",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/bathroom",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_b": {
+            "name": "SAD",
+            "type": 2,
+            "image_idx": 1,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/sad",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/sad",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_c": {
+            "name": "LAMP",
+            "type": 2,
+            "image_idx": 1,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/bedroom_lamp",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/bedroom_lamp",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        }
+    },
+    {
+        "heading": "DOWN",
+        "icon_idx": 0,
+        "tile_a": {
+            "name": "BULB",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/livingroom",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/livingroom",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_b": {
+            "name": "LAMP",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/livingroom_lamp",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/livingroom_lamp",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_c": {
+            "name": "KITCHEN",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/kitchen",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/kitchen",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        }
+    },
+    {
+        "heading": "DOWN",
+        "icon_idx": 0,
+        "tile_a": {
+            "name": "HALL DOWN",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/hall_down",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/hall_down",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_b": {
+            "name": "SLOW COOK",
+            "type": 2,
+            "image_idx": 1,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/slow_cooker",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/slow_cooker",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_c": {
+            "name": "TREE",
+            "type": 2,
+            "image_idx": 1,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/tree",
+                "json_body": "{\"code\": \"toggle\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross/tree",
+                "json_body": "{\"code\": \"status\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        }
+        
+    },
+    {
         "heading": "DEVICES",
         "icon_idx": 1,
         "tile_a": {
@@ -270,6 +445,214 @@
                 "method": "POST",
                 "endpoint": "/v2/alert",
                 "json_body": "{\"message\": \"find_phone\", \"title\": \"Tasker\", \"priority\": \"1\"}"
+            }
+        }
+    },
+    {
+        "heading": "DEVICES",
+        "icon_idx": 1,
+        "tile_a": {
+            "name": "PC",
+            "type": 2,
+            "image_idx": 7,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/wol/pc",
+                "json_body": "{\"code\": \"power\"}"
+            }
+        },
+        "tile_b": {
+            "name": "SHITCUBE",
+            "type": 2,
+            "image_idx": 7,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/wol/shitcube",
+                "json_body": "{\"code\": \"power\"}"
+            }
+        }
+    },
+    {
+        "heading": "TVCOM",
+        "icon_idx": 2,
+        "tile_a": {
+            "name": "POWER",
+            "type": 2,
+            "image_idx": 7,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/tvcom/ir_key",
+                "json_body": "{\"code\": \"power\"}"
+            }
+        },
+        "tile_b": {
+            "name": "INPUT",
+            "type": 2,
+            "image_idx": 8,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/tvcom/ir_key",
+                "json_body": "{\"code\": \"input\"}"
+            }
+        },
+        "tile_c": {
+            "name": "ASPECT",
+            "type": 2,
+            "image_idx": 9,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/tvcom/ir_key",
+                "json_body": "{\"code\": \"ratio\"}"
+            }
+        }
+    },
+    {
+        "heading": "TVCOM",
+        "icon_idx": 2,
+        "tile_a": {
+            "name": "VOLUME",
+            "type": 2,
+            "image_idx": 11,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/tvcom/ir_key",
+                "json_body": "{\"code\": \"vol_up\"}"
+            }
+        },
+        "tile_b": {
+            "name": "MUTE",
+            "type": 2,
+            "image_idx": 6,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/tvcom/ir_key",
+                "json_body": "{\"code\": \"mute\"}"
+            }
+        },
+        "tile_c": {
+            "name": "VOLUME",
+            "type": 2,
+            "image_idx": 10,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/tvcom/ir_key",
+                "json_body": "{\"code\": \"vol_down\"}"
+            }
+        }
+    },
+    {
+        "heading": "SNOWDON",
+        "icon_idx": 3,
+        "tile_a": {
+            "name": "POWER",
+            "type": 2,
+            "image_idx": 7,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/snowdon",
+                "json_body": "{\"code\": \"power\"}"
+            }
+        },
+        "tile_b": {
+            "name": "INPUT",
+            "type": 2,
+            "image_idx": 8,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/snowdon",
+                "json_body": "{\"code\": \"input\"}"
+            }
+        }
+    },
+    {
+        "heading": "SNOWDON",
+        "icon_idx": 3,
+        "tile_a": {
+            "name": "VOLUME",
+            "type": 2,
+            "image_idx": 11,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/snowdon",
+                "json_body": "{\"code\": \"volume_up\"}"
+            }
+        },
+        "tile_b": {
+            "name": "MUTE",
+            "type": 2,
+            "image_idx": 6,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/snowdon",
+                "json_body": "{\"code\": \"mute\"}"
+            }
+        },
+        "tile_c": {
+            "name": "VOLUME",
+            "type": 2,
+            "image_idx": 10,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/snowdon",
+                "json_body": "{\"code\": \"volume_down\"}"
+            }
+        }
+    },
+    {
+        "heading": "MULTI",
+        "icon_idx": 0,
+        "tile_a": {
+            "name": "UP",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross",
+                "json_body": "{\"code\": \"toggle\", \"hosts\": \"office,hall_up,bedroom,sad\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross",
+                "json_body": "{\"code\": \"status\", \"hosts\": \"office,hall_up,bedroom,sad\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_b": {
+            "name": "DOWN",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross",
+                "json_body": "{\"code\": \"toggle\", \"hosts\": \"hall_down,livingroom,livingroom_lamp,kitchen\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross",
+                "json_body": "{\"code\": \"status\", \"hosts\": \"hall_down,livingroom,livingroom_lamp,kitchen\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
+            }
+        },
+        "tile_c": {
+            "name": "ALL",
+            "type": 2,
+            "image_idx": 0,
+            "action_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross",
+                "json_body": "{\"code\": \"toggle\", \"hosts\": \"office,hall_up,bedroom,sad,hall_down,livingroom,livingroom_lamp,kitchen\"}"
+            },
+            "status_request": {
+                "method": "POST",
+                "endpoint": "/v2/meross",
+                "json_body": "{\"code\": \"status\", \"hosts\": \"office,hall_up,bedroom,sad,hall_down,livingroom,livingroom_lamp,kitchen\"}",
+                "key": "onoff",
+                "on_value": "1",
+                "off_value": "0"
             }
         }
     }

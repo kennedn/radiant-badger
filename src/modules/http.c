@@ -382,6 +382,23 @@ void http_request_with_key(const char *url, const char *endpoint, const char *me
         return;
     }
 
+#ifdef API_IP
+    // If API_IP is defined, use it directly and skip DNS resolution
+    if (strlen(API_IP) > 0) {
+        cyw43_arch_lwip_begin();
+        ipaddr_aton(API_IP, &state->remote_addr);
+        cyw43_arch_lwip_end();
+        
+        DEBUG_PRINTF("Using pre-resolved API_IP: %s\n", API_IP);
+        if (!tcp_client_open(state)) {
+            tcp_result(state, -1);
+            return;
+        }
+        return;
+    }
+#endif
+
+    // Otherwise, perform DNS resolution
     cyw43_arch_lwip_begin();
     int err = dns_gethostbyname(url, &state->remote_addr, tcp_dns_found, state);
     cyw43_arch_lwip_end();

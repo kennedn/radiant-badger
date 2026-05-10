@@ -70,11 +70,11 @@ bool __no_inline_not_in_flash_func(get_bootsel_button)() {
     return button_state;
 }
 
-// 12am daily alarm
-datetime_t ntp_daily_alarm = datetime_t{
+// 1 minute alarm
+datetime_t ntp_alarm = datetime_t{
     .day = -1,
-    .hour = 00,
-    .min = 00,
+    .hour = -1,
+    .min = 15,
     .sec = 00};
 
 int request_buttons[] = {badger.A, badger.B, badger.C};
@@ -96,8 +96,8 @@ static volatile bool visible_refresh_active = false;
 static volatile uint8_t visible_refresh_pending = 0;
 static uint8_t visible_refresh_column = 0;
 
+void wifi_wait();
 void deinit(const char *message = NULL);
-
 void restful_callback(void *result, int status_code, void *arg);
 static void mode_update_callback(void *result, int status_code, void *arg);
 static void boiler_target_update_callback(void *result, int status_code, void *arg);
@@ -116,7 +116,16 @@ static void request_tile_schedule_submit(TILE *tile);
 static void set_tile_schedule_index(TILE *tile, int index);
 static void restore_tiles_screen();
 static void refresh_tile_detail(TILE *tile);
-void wifi_wait();
+static void refresh_current_screen();
+
+void rearm_rtc_timer() {
+    // Set RTC interrupt to wake up after 15 minutes
+    badger.pcf85063a->set_timer(15, PCF85063A::TIMER_TICK_1_OVER_60HZ);
+    badger.pcf85063a->enable_timer_interrupt(true);
+
+    // Clear source of interrupt
+    badger.pcf85063a->clear_timer_flag();
+}
 
 void ntp_callback(datetime_t *datetime, void *arg) {
     if (datetime == NULL) {
@@ -130,18 +139,13 @@ void ntp_callback(datetime_t *datetime, void *arg) {
     rtc_set_datetime(datetime);
 
     DEBUG_PRINTF("Setting daily NTP time alarm\n");
-    // Set daily alarm and enable interrupt
-    badger.pcf85063a->set_alarm(ntp_daily_alarm.sec, ntp_daily_alarm.min, ntp_daily_alarm.hour, ntp_daily_alarm.day);
-    badger.pcf85063a->enable_alarm_interrupt(true);
-
-    // Clear source of interrupt
-    badger.pcf85063a->clear_alarm_flag();
 
     // Flag that NTP callback has concluded
     ntp_time_set = true;
 }
 
 static void render_current_screen(const char *message) {
+
     badger.graphics->set_pen(15);
     badger.graphics->clear();
 
@@ -159,6 +163,7 @@ static void render_current_screen(const char *message) {
     draw_status_bar(badger, message);
     badger.update();
     badger.uc8151->busy_wait();
+    DEBUG_PRINTF("render_current_screen (since boot): %ld us\n", (long)(to_us_since_boot(get_absolute_time())));
 }
 
 static void refresh_tile_status(TILE *tile) {
@@ -216,7 +221,19 @@ static void refresh_visible_tiles() {
         visible_refresh_active = false;
         if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
             render_current_screen(NULL);
+
         }
+    }
+}
+
+static void refresh_current_screen() {
+    if (!wifi_up()) {
+        wifi_wait();
+    }
+    if (current_screen == APP_SCREEN_TILES) {
+        refresh_visible_tiles();
+    } else if (current_screen == APP_SCREEN_DETAIL && active_tile) {
+        refresh_tile_detail(active_tile);
     }
 }
 
@@ -684,9 +701,12 @@ alarm_id_t rearm_halt_timeout(alarm_id_t id) {
 
 
 void wifi_connect_async() {
-    // Use cyw43_wifi_join so that wifi channel can be specified. This shaves ~700ms of connection time, static IP / disable DNS in lwipopts.h shaves ~800ms too
-    cyw43_wifi_join(&cyw43_state, strlen(WIFI_SSID), (const uint8_t *)WIFI_SSID, strlen(WIFI_PASSWORD),
-                    (const uint8_t *)WIFI_PASSWORD, CYW43_AUTH_WPA2_MIXED_PSK, WIFI_BSSID, WIFI_CHANNEL);
+    // // Use cyw43_wifi_join so that wifi channel can be specified. This shaves ~700ms of connection time, static IP / disable DNS in lwipopts.h shaves ~800ms too
+    // cyw43_wifi_join(&cyw43_state, strlen(WIFI_SSID), (const uint8_t *)WIFI_SSID, strlen(WIFI_PASSWORD),
+    //                 (const uint8_t *)WIFI_PASSWORD, CYW43_AUTH_WPA2_MIXED_PSK, WIFI_BSSID, WIFI_CHANNEL);
+
+    // Just use the higher level async connect function for simplicity
+      cyw43_arch_wifi_connect_async(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK);
 }
 
 bool wifi_up() {
@@ -694,6 +714,7 @@ bool wifi_up() {
 }
 
 void wifi_wait() {
+    uint32_t wifi_timer = to_ms_since_boot(get_absolute_time());
     uint32_t sw_timer = 0;
     uint32_t led_timer = 0;
     uint8_t attempts = 0;
@@ -717,6 +738,7 @@ void wifi_wait() {
             led_timer = to_ms_since_boot(get_absolute_time());
         }
     }
+    DEBUG_PRINTF("wifi_wait: %ld us\n", (long)(to_us_since_boot(get_absolute_time()) - wifi_timer));
     badger.led(255);
 }
 
@@ -754,6 +776,17 @@ int wait_for_button_press_release() {
     }
 }
 
+void tiles_init() {
+    tiles_make_tiles();
+    if (!wifi_up()) {
+        wifi_wait();
+    }
+    initialised = true;
+    current_screen = APP_SCREEN_TILES;
+    active_tile = NULL;
+    refresh_visible_tiles();
+}
+
 void init() {
     badger.init();
     badger.led(255);
@@ -786,11 +819,14 @@ void init() {
     if(!rtc_byte || badger.pressed_to_wake(badger.RTC)) {
         // Must wait for WiFi to be up before triggering an NTP request
         wifi_wait();
+        // Initialise tiles
+        tiles_init();
+        // Retrieve time from NTP and re-arm RTC alarm
         retrieve_time(true);
 
         // If we were woken by the RTC alarm, just go back to sleep
         if (badger.pressed_to_wake(badger.RTC)) {
-            deinit();
+            deinit("SLEEPING");
         }
         
         // Set the external RTC free byte so we can later determine if it has been initalized
@@ -803,7 +839,7 @@ void init() {
 void deinit(const char *message) {
     // Try again later if we are charging, because calling halt now would keep us awake
     if (power_is_charging()) {
-        DEBUG_PRINTF("Cannot deinit whilst charging, rearming timer instead of sleeping\n");
+        DEBUG_PRINTF("Cannot deinit whilst charging, rearming halt timeout instead of sleeping\n");
         rearm_halt_timeout(-1);
         return;
     }
@@ -811,13 +847,16 @@ void deinit(const char *message) {
     DEBUG_PRINTF("Going to sleep zZzZ\n");
     if (message) {
         restore_tiles_screen();
-        render_current_screen(message);
+        while(visible_refresh_pending > 0) {
+            tight_loop_contents();
+        }
     }
     if(initialised) {
         cyw43_arch_deinit();
     }
+    
     tiles_free();
-
+    rearm_rtc_timer();
     badger.led(0);
     badger.halt();
 }
@@ -851,16 +890,8 @@ int main() {
         int click_count = wait_for_button_press_release();
 
         if (!initialised) {
-            piezo_play(piezo_notes_test_4, piezo_notes_test_4_len, false);
             init();
-            tiles_make_tiles();
-            if (!wifi_up()) {
-                wifi_wait();
-            }
-            initialised = true;
-            current_screen = APP_SCREEN_TILES;
-            active_tile = NULL;
-            refresh_visible_tiles();
+            tiles_init();
             continue;
         }
 
@@ -877,14 +908,7 @@ int main() {
                 sleep_ms(10);
             }
             badger.led(255);
-            if (!wifi_up()) {
-                wifi_wait();
-            }
-            if (current_screen == APP_SCREEN_TILES) {
-                refresh_visible_tiles();
-            } else if (current_screen == APP_SCREEN_DETAIL && active_tile) {
-                refresh_tile_detail(active_tile);
-            }
+            refresh_current_screen();
             continue;
         }
 

@@ -203,7 +203,6 @@ void restful_free_request(RESTFUL_REQUEST *request) {
 
 RESTFUL_REQUEST_DATA *restful_make_request_data(char *method, char *endpoint, char *json_body) {
     if (!method || !endpoint || !json_body || !method[0] || !endpoint[0] || !json_body[0]) {
-        DEBUG_PRINTF("Required data in request data was NULL\n");
         return NULL;
     }
     RESTFUL_REQUEST_DATA *request_data = (RESTFUL_REQUEST_DATA *)malloc(sizeof(RESTFUL_REQUEST_DATA));
