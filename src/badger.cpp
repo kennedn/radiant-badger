@@ -742,13 +742,47 @@ void wifi_wait() {
     badger.led(255);
 }
 
+static void http_activity_wait_led() {
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    static uint32_t request_start_timer = 0;
+    static uint32_t led_timer = 0;
+    static bool led = true;
+
+    if (http_active_request_count() == 0) {
+        request_start_timer = 0;
+        led_timer = 0;
+        led = true;
+        badger.led(255);
+        return;
+    }
+
+    if (request_start_timer == 0) {
+        request_start_timer = now;
+        badger.led(255);
+        return;
+    }
+
+    if ((now - request_start_timer) < 300) {
+        badger.led(255);
+        return;
+    }
+
+    if (led_timer == 0 || (now - led_timer) > 100) {
+        badger.led(led ? 255 : 0);
+        led = !led;
+        led_timer = now;
+    }
+}
+
 int wait_for_button_press_release() {
     uint32_t mask = (1UL << badger.A) | (1UL << badger.B) | (1UL << badger.C) | (1UL << badger.UP) | (1UL << badger.DOWN);
     uint32_t sw_timer = to_ms_since_boot(get_absolute_time());
     int counter = 0;
     while (true) {
+        http_activity_wait_led();
         // Wait for button press
         while(!(gpio_get_all() & mask)) {
+            http_activity_wait_led();
             if (get_bootsel_button()) {
                 return -1;
             }

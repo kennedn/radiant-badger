@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #include "lwip/err.h"
 
 typedef enum {
@@ -20,6 +22,9 @@ typedef struct {
     char value[128];
 } HTTP_TEMPERATURE_RESULT;
 
+typedef HTTP_TEMPERATURE_RESULT HTTP_REQUEST_RESULT;
+
 typedef void (*http_callback_t)(void *result, int response_code, void *arg);
 void http_request(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg);
 void http_request_with_key(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg, const char *extract_key);
+uint8_t http_active_request_count(void);

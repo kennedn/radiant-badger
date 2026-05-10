@@ -57,6 +57,24 @@ typedef struct TCP_CLIENT_T_ {
     const char *extract_key;
 } TCP_CLIENT_T;
 
+static uint8_t active_request_count = 0;
+
+static void http_request_begin(void) {
+    if (active_request_count < UINT8_MAX) {
+        active_request_count++;
+    }
+}
+
+static void http_request_end(void) {
+    if (active_request_count > 0) {
+        active_request_count--;
+    }
+}
+
+uint8_t http_active_request_count(void) {
+    return active_request_count;
+}
+
 static bool http_extract_simple_value(const char *message_body, const char *key, char *value, int value_len) {
     if (!message_body || !key || !value || value_len <= 0) {
         return false;
@@ -220,6 +238,7 @@ static err_t tcp_result(void *arg, int status) {
 
     err_t err = tcp_client_close(arg);
     http_process_buffer(arg);
+    http_request_end();
     free(state);
     DEBUG_PRINTF("state freed\n");
     return err;
@@ -381,6 +400,8 @@ void http_request_with_key(const char *url, const char *endpoint, const char *me
     if (!state) {
         return;
     }
+
+    http_request_begin();
 
 #ifdef API_IP
     // If API_IP is defined, use it directly and skip DNS resolution
