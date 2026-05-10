@@ -1,6 +1,6 @@
 #pragma once
 #define DEBUG_PRINTF(...) \
-  do { if (DEBUG_PRINT) printf(__VA_ARGS__); } while (0)
+  do { if (DEBUG_PRINT > 0) printf(__VA_ARGS__); } while (0)
 
 
 #define HALT_TIMEOUT_MS 60000

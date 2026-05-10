@@ -1,5 +1,5 @@
 # radiant-badger
-Interface for controlling smart radiators and thermostats on the Badger 2040 W
+Interface for controlling smart radiators, thermostats, and RESTful smart devices on the Badger 2040 W.
 
 ![](./media/demo2.gif)
 
@@ -18,7 +18,7 @@ Parts:
 </p>
 
 
-# Preparing the build environment
+## Preparing the build environment
 
 Install build requirements:
 
@@ -49,74 +49,92 @@ git clone -b badger-2040w https://github.com/kennedn/pimoroni-pico /path/to/pimo
 export PIMORONI_PICO_PATH="/path/to/pimoroni-pico"
 ```
 
-# Configuration
+## Configuration
 
-> NOTE: As much WIFI information as possible is specified at compile time in an effort to reduce wifi connect times since these occur each time the device wakes up
-
+> NOTE: DNS lookup is skipped if `API_IP` is provided, this provides a significant speedup for initial http request
 The following definitions are required to build the project:
 
-| Definition          | Description                                    |
-|---------------------|------------------------------------------------|
-| WIFI_SSID           | Name of wifi network to join                   |
-| WIFI_PASSWORD       | Password of wifi network to join               |
-| WIFI_BSSID          | BSSID of wifi network to join                  |
-| WIFI_CHANNEL        | Channel of wifi network to join                |
-| API_SERVER          | API server to use for HTTP calls               |
+| Definition    | Description                              |
+|---------------|------------------------------------------|
 
 Additional definitions have default values that can be overridden:
 
-| Definition          | Default value  | Description                            |
-|---------------------|----------------|----------------------------------------|
-| NTP_SERVER          | pool.ntp.org   | NTP server to retrieve time from       |
-| IP_ADDRESS          | 192.168.1.203  | Static IP address to use on network    |
-| IP_GATEWAY          | 192.168.1.1    | Default gateway to use on network      |
-| IP_DNS              | 192.168.1.1    | DNS address to use for name resolution |
-| JSON_FILEPATH       | PROJECT_ROOT/config/tiles.json | JSON file containing tile definitions |
-| DEBUG_PRINT         | 0              | Enables debug printing to (USB) UART   |
+| Definition    | Default value                  | Description                                     |
+|---------------|--------------------------------|-------------------------------------------------|
+| WIFI_SSID     | unset                          | Name of wifi network to join                    |
+| WIFI_PASSWORD | unset                          | Password of wifi network to join                |
+| API_SERVER    | unset                          | API server host name used for HTTP calls        |
+| API_IP        | unset                          | Optional pre-resolved IP for API requests       |
+| NTP_SERVER    | pool.ntp.org                   | NTP server to retrieve time from                |
+| TZ            | GMT0BST,M3.5.0/1,M10.5.0/2     | POSIX Timezone string used time display         |
+| JSON_FILEPATH | PROJECT_ROOT/config/tiles.json | JSON file containing tile definitions           |
+| DEBUG_PRINT   | 0                              | Enables debug printing to (USB) UART            |
 
 > NOTE: The Pico SDK also requires PICO_BOARD be set to pico_w to build wifi projects
 
 ## JSON file
 
-A JSON file is required to define columns and tiles in radiant-badger. It's default location is `PROJECT_ROOT/config/tiles.json`.
+A JSON file is required to define columns and tiles in radiant-badger. Its default location is `PROJECT_ROOT/config/tiles.json`.
 
-The file contains an array of columns. Each column contains up to 3 tiles (tile_a, tile_b, tile_c) that are displayed on the screen, and can be navigated with UP/DOWN buttons.
+The file contains an array of columns. Each column contains up to 3 tiles (`tile_a`, `tile_b`, `tile_c`) that are displayed on the screen and can be navigated with the UP/DOWN buttons. 
 
 ### Column
 
-| Key      | Description                                                   |
-|----------|---------------------------------------------------------------|
-| heading  | Display name for the column (e.g., "UP", "DOWN")              |
-| icon_idx | Index of icon to display from [image_tiles[]](/src/images.h#54) |
-| tile_a   | Left tile definition (required)                               |
-| tile_b   | Center tile definition (optional)                             |
-| tile_c   | Right tile definition (optional)                              |
+| Key      | Description                                                     |
+|----------|-----------------------------------------------------------------|
+| heading  | Display name for the column (e.g. "UP", "DOWN")              |
+| icon_idx | Index of icon to display from [image_tiles[]](/src/modules/images.h#148) |
+| tile_a   | Left tile definition (optional)                                 |
+| tile_b   | Center tile definition (optional)                               |
+| tile_c   | Right tile definition (optional)                                |
 
-### Tile
+### Boiler tile
 
-| Key                     | Type   | Description                                                      |
-|-------------------------|--------|------------------------------------------------------------------|
-| name                    | string | Tile name, shown under the tile icon                             |
-| type                    | number | 0 = BOILER, 1 = RADIATOR                                         |
-| image_idx               | number | Index of icon to display                                         |
-| status_request          | object | HTTP request to fetch current tile status                        |
-| mode_request            | object | **Optional** HTTP request to change mode (BOILER only)           |
-| target_request          | object | **Optional** HTTP request to change target temp (BOILER only)    |
-| battery_request         | object | **Optional** HTTP request to fetch battery (RADIATOR only)       |
-| boost_request           | object | **Optional** HTTP request to set boost (RADIATOR only)           |
-| schedule_request        | object | **Optional** HTTP request to change schedule (BOILER only)       |
-| schedule_status_request | object | **Optional** HTTP request to fetch schedule (BOILER only)        |
+| Key | Type | Description |
+| --- | --- | --- |
+| name | string | Tile name, shown under the tile icon |
+| type | number | 0 = BOILER |
+| image_idx | number | Index of icon to display |
+| status_request | object | HTTP request to fetch current tile status |
+| mode_request | object | Optional HTTP request to change mode |
+| target_request | object | Optional HTTP request to change target temp |
+| schedule_request | object | Optional HTTP request to change schedule |
+| schedule_status_request | object | Optional HTTP request to fetch schedule |
+
+### Radiator tile
+
+| Key | Type | Description |
+| --- | --- | --- |
+| name | string | Tile name, shown under the tile icon |
+| type | number | 1 = RADIATOR |
+| image_idx | number | Index of icon to display |
+| status_request | object | HTTP request to fetch current tile status |
+| mode_request | object | Optional HTTP request to change mode |
+| battery_request | object | Optional HTTP request to fetch battery status |
+| boost_request | object | Optional HTTP request to set boost |
+
+### RESTFUL tile
+
+| Key | Type | Description |
+| --- | --- | --- |
+| name | string | Tile name, shown under the tile icon |
+| type | number | 2 = RESTFUL |
+| image_idx | number | Index of icon to display |
+| action_request | object | HTTP request sent when the tile is activated |
+| status_request | object | HTTP request to fetch the post-action status |
+| status_key | string | JSON key to extract from the response body |
+| status_on_value | string | Value that should render as ON |
+| status_off_value | string | Value that should render as OFF |
 
 ### HTTP Request
 
-| Key       | Description                                         |
-|-----------|-----------------------------------------------------|
-| method    | HTTP method (POST or GET)                           |
-| endpoint  | HTTP URL endpoint, appended to API_SERVER           |
-| json_body | JSON string with optional %d or %s format specifiers|
-| schedules | Optional array of schedule names                    |
+| Key       | Description                                          |
+|-----------|------------------------------------------------------|
+| method    | HTTP method (POST or GET)                            |
+| endpoint  | HTTP URL endpoint, appended to API_SERVER            |
+| json_body | JSON string with optional %d or %s format specifiers |
 
-#### Example Column
+#### Example file
 
 ```json
 {
@@ -131,31 +149,55 @@ The file contains an array of columns. Each column contains up to 3 tiles (tile_
             "endpoint": "/v2/thermostat",
             "json_body": "{\"code\": \"status\"}"
         },
+        "mode_request": {
+            "method": "POST",
+            "endpoint": "/v2/thermostat",
+            "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
+        },
+        "target_request": {
+            "method": "POST",
+            "endpoint": "/v2/thermostat",
+            "json_body": "{\"code\":\"heatTemp\",\"value\":%d}"
+        },
         "boost_request": {
             "method": "POST",
             "endpoint": "/v2/thermostat",
             "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
+        },
+        "schedule_request": {
+            "method": "POST",
+            "endpoint": "/v2/radiator",
+            "json_body": "{\"hosts\":\"office,bedroom,kitchen,livingroom\",\"code\":\"schedule\",\"value\":\"%s\"}",
+            "schedules": ["default", "study"]
+        },
+        "schedule_status_request": {
+            "method": "POST",
+            "endpoint": "/v2/radiator",
+            "json_body": "{\"hosts\":\"office,bedroom,kitchen,livingroom\",\"code\":\"status\"}"
         }
     },
     "tile_b": {
-        "name": "OFFICE",
-        "type": 1,
-        "image_idx": 14,
+        "name": "LAMP",
+        "type": 2,
+        "image_idx": 0,
+        "action_request": {
+            "method": "POST",
+            "endpoint": "/v2/meross/lamp",
+            "json_body": "{\"code\": \"toggle\"}"
+        },
         "status_request": {
             "method": "POST",
-            "endpoint": "/v2/radiator/office",
-            "json_body": "{\"code\": \"status\"}"
-        },
-        "boost_request": {
-            "method": "POST",
-            "endpoint": "/v2/radiator/office",
-            "json_body": "{\"code\": \"boost\", \"value\":\"%d\"}"
+            "endpoint": "/v2/meross/lamp",
+            "json_body": "{\"code\": \"status\"}",
+            "key": "onoff",
+            "on_value": "1",
+            "off_value": "0"
         }
     }
 }
 ```
 
-# Building 
+## Building
 
 Clone Repo and cd:
 
@@ -166,39 +208,23 @@ cd radiant-badger
 Configure the JSON file at `PROJECT_ROOT/config/tiles.json`
 
 ```bash
-cd config
-vi tiles.json
-cd ..
+vi config/tiles.json
 ```
 
-> NOTE: If **tiles.json** is updated in the future, `cmake ..` must be run from the build directory again to apply any changes
+> NOTE: If **tiles.json** is updated in the future, CMake must be run again so the generated tile data is refreshed.
 
-Make build directory and cd:
-
-```bash
-mkdir build
-cd build
-```
-
-
-Run cmake with definitions:
+Configure and build:
 
 ```bash
-cmake .. \
-  -DPICO_BOARD=pico_w \
-  -DWIFI_SSID="cool-wifi-ssid" \
-  -DWIFI_PASSWORD="cool-wifi-password" \
-  -DWIFI_BSSID=66:55:44:33:22:11 \
-  -DWIFI_CHANNEL=9 \
-  -DAPI_SERVER="api.cool.com" \
-  -DPICO_SDK_PATH="/path/to/pico-sdk" \
-  -DPIMORONI_PICO_PATH="/path/to/pimoroni-pico" \
-  -DCMAKE_BUILD_TYPE=Release
-```
+cmake -B build \
+    -DPICO_BOARD=pico_w \
+    -DPICO_PLATFORM=rp2040 \
+    -DWIFI_SSID="YOUR_WIFI_SSID" \
+    -DWIFI_PASSWORD="YOUR_WIFI_PASSWORD" \
+    -DAPI_SERVER="YOUR_API_SERVER" \
+    -DAPI_IP="YOUR_API_IP_OPTIONAL" \
+    -DPICO_SDK_PATH="/path/to/pico-sdk" \
+    -DPIMORONI_PICO_PATH="/path/to/pimoroni-pico" 
 
-Cd to src folder and make:
-
-```bash
-cd src
-make
+cmake --build build -j $(nproc)
 ```

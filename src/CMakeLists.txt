@@ -3,6 +3,7 @@ add_executable(badger)
 # Default definitions
 set(TZ "GMT0BST,M3.5.0/1,M10.5.0/2" CACHE STRING "Specify the explicit timezone string") # defualt is BST
 set(NTP_SERVER "pool.ntp.org" CACHE STRING "Specify the NTP server")
+set(DEBUG_PRINT 0 CACHE STRING "Enable debug printing to USB UART")
 
 set(JSON_FILEPATH "${PROJECT_SOURCE_DIR}/config/tiles.json" CACHE STRING "Location of tiles json")
 
