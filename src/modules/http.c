@@ -11,7 +11,7 @@
 #include "pico/stdlib.h"
 
 #define TCP_PORT 80
-#define BUF_SIZE 2048
+#define BUF_SIZE 8192
 
 #define TEST_ITERATIONS 10
 #define POLL_TIME_S 5
@@ -145,13 +145,6 @@ static void http_process_buffer(void *arg) {
     }
     message_body++;
     
-    // Bounds check: ensure message_body pointer is within the buffer
-    if (message_body < (char *)state->buffer || message_body >= (char *)state->buffer + state->buffer_len) {
-        DEBUG_PRINTF("message_body out of bounds, aborting\n");
-        state->callback(NULL, response_code, state->arg);
-        return;
-    }
-    
     DEBUG_PRINTF("http_message_body_parse message_body: %s\n", message_body);
 
     if (state->request_type == REQUEST_TYPE_RESTFUL) {
@@ -234,6 +227,7 @@ static err_t tcp_result(void *arg, int status) {
         DEBUG_PRINTF("success\n");
     } else {
         DEBUG_PRINTF("failed %d\n", status);
+        
     }
 
     err_t err = tcp_client_close(arg);

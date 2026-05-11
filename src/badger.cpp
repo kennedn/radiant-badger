@@ -216,14 +216,6 @@ static void refresh_visible_tiles() {
         visible_refresh_pending++;
         refresh_tile_status(tile);
     }
-
-    if (visible_refresh_pending == 0) {
-        visible_refresh_active = false;
-        if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
-            render_current_screen(NULL);
-
-        }
-    }
 }
 
 static void refresh_current_screen() {
@@ -522,10 +514,10 @@ void restful_callback(void *result, int status_code, void *arg) {
             visible_refresh_pending--;
         }
         if (visible_refresh_pending == 0) {
-            visible_refresh_active = false;
             if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
                 render_current_screen(NULL);
             }
+            visible_refresh_active = false;
         }
         restful_free_request(request);
         return;
@@ -879,9 +871,9 @@ void deinit(const char *message) {
     }
 
     DEBUG_PRINTF("Going to sleep zZzZ\n");
-    if (message) {
+    if (message && !badger.pressed_to_wake(badger.RTC)) {
         restore_tiles_screen();
-        while(visible_refresh_pending > 0) {
+        while(visible_refresh_active) {
             tight_loop_contents();
         }
     }
