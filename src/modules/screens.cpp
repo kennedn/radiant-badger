@@ -83,7 +83,7 @@ static int get_schedule_edit_index(TILE *tile) {
     return value;
 }
 
-static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool show_heading) {
+void draw_status_bar(pimoroni::Badger2040W &badger, const char *title, bool sleeping) {
     datetime_t datetime;
     float voltage;
     char powerPercent = 0;
@@ -94,7 +94,7 @@ static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool s
     int32_t clock_x_offset;
     uint8_t *wifi_image = (uint8_t *)image_icon_wifi_on;
     uint8_t *battery_image = (uint8_t *)image_status_battery_charging;
-    uint8_t *heading_icon = NULL;
+    uint8_t *heading_icon = (uint8_t *)tiles_get_heading()->icon;
 
     if (!power_is_charging()) {
         battery_image = (uint8_t *)image_status_battery_discharging;
@@ -104,14 +104,13 @@ static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool s
         powerPercent = power_percent(&voltage);
         sprintf(percentStr, "%d%%", powerPercent);
     }
-    
-    if (show_heading) {
-        heading_icon = (uint8_t *)tiles_get_heading()->icon;
-    }
 
+    if (sleeping) {
+        wifi_image = (uint8_t *)image_status_sleeping;
+    }
+    
     if (title) {
         snprintf(clock_str, sizeof(clock_str), "%s", title);
-        wifi_image = (uint8_t *)image_status_sleeping;
     } else {
         if(!wifi_up()) {
             wifi_image = (uint8_t *)image_icon_wifi_off;
@@ -140,10 +139,6 @@ static void draw_header(pimoroni::Badger2040W &badger, const char *title, bool s
         badger.graphics->text(percentStr, Point(WIDTH - status_x_offset, 6), WIDTH, 1.0);
         badger.graphics->rectangle(Rect(WIDTH - status_x_offset - (image_status_size + x_pad) + 2, 7, powerPercent / 10 + 1, 6));
     }
-}
-
-void draw_status_bar(pimoroni::Badger2040W &badger, const char *message) {
-    draw_header(badger, message, true);
 }
 
 void draw_tiles(pimoroni::Badger2040W &badger, const char *selected_name, const char *indicator_icon) {

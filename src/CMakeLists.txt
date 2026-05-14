@@ -18,7 +18,7 @@ target_compile_definitions(badger PRIVATE
     TZ=\"${TZ}\"
     NTP_SERVER=\"${NTP_SERVER}\"
     TILES_DATA=${TILES_DATA}
-    DEBUG_PRINT=${DEBUG_PRINT}
+    DEBUG_PRINT=1
 )
 add_subdirectory(modules)
 
@@ -41,6 +41,7 @@ target_link_libraries(badger
     pico_cyw43_arch_lwip_threadsafe_background
 )
 
-pico_enable_stdio_usb(badger 1)
+pico_enable_stdio_usb(badger 0)
+pico_enable_stdio_uart(badger 1)
 
 pico_add_extra_outputs(badger)

@@ -12,7 +12,7 @@ namespace pimoroni {
 class Badger2040W;
 }
 
-void draw_status_bar(pimoroni::Badger2040W &badger, const char *message = nullptr);
+void draw_status_bar(pimoroni::Badger2040W &badger, const char *message = nullptr, bool sleeping = false);
 void draw_tiles(pimoroni::Badger2040W &badger, const char *selected_name, const char *indicator_icon);
 void draw_tile_detail(pimoroni::Badger2040W &badger, TILE *tile);
 void draw_tile_boost(pimoroni::Badger2040W &badger, TILE *tile);

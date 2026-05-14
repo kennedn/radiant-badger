@@ -369,44 +369,7 @@
                 "on_value": "1",
                 "off_value": "0"
             }
-        },
-        "tile_b": {
-            "name": "SLOW COOK",
-            "type": 2,
-            "image_idx": 1,
-            "action_request": {
-                "method": "POST",
-                "endpoint": "/v2/meross/slow_cooker",
-                "json_body": "{\"code\": \"toggle\"}"
-            },
-            "status_request": {
-                "method": "POST",
-                "endpoint": "/v2/meross/slow_cooker",
-                "json_body": "{\"code\": \"status\"}",
-                "key": "onoff",
-                "on_value": "1",
-                "off_value": "0"
-            }
-        },
-        "tile_c": {
-            "name": "TREE",
-            "type": 2,
-            "image_idx": 1,
-            "action_request": {
-                "method": "POST",
-                "endpoint": "/v2/meross/tree",
-                "json_body": "{\"code\": \"toggle\"}"
-            },
-            "status_request": {
-                "method": "POST",
-                "endpoint": "/v2/meross/tree",
-                "json_body": "{\"code\": \"status\"}",
-                "key": "onoff",
-                "on_value": "1",
-                "off_value": "0"
-            }
         }
-        
     },
     {
         "heading": "DEVICES",

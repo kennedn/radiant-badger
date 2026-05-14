@@ -94,7 +94,6 @@ static APP_SCREEN current_screen = APP_SCREEN_TILES;
 static TILE *active_tile = NULL;
 static volatile bool visible_refresh_active = false;
 static volatile uint8_t visible_refresh_pending = 0;
-static uint8_t visible_refresh_column = 0;
 
 void wifi_wait();
 void deinit(const char *message = NULL);
@@ -103,9 +102,9 @@ static void mode_update_callback(void *result, int status_code, void *arg);
 static void boiler_target_update_callback(void *result, int status_code, void *arg);
 static void boost_update_callback(void *result, int status_code, void *arg);
 static void schedule_update_callback(void *result, int status_code, void *arg);
-static void render_current_screen(const char *message = NULL);
+static void render_current_screen(const char *message = NULL, bool sleeping = false);
 static void refresh_tile_status(TILE *tile);
-static void refresh_visible_tiles();
+static void refresh_visible_tiles(bool visible_refresh = true);
 static void request_tile_mode(TILE *tile);
 static void request_boiler_target_toggle(TILE *tile);
 static void request_tile_boost_edit(TILE *tile);
@@ -114,14 +113,14 @@ static void set_tile_boost_value(TILE *tile, int value);
 static void request_tile_schedule_edit(TILE *tile);
 static void request_tile_schedule_submit(TILE *tile);
 static void set_tile_schedule_index(TILE *tile, int index);
-static void restore_tiles_screen();
+static void restore_tiles_screen(bool visible_refresh = true);
 static void refresh_tile_detail(TILE *tile);
 static void refresh_current_screen();
 
 void rearm_rtc_timer() {
     // Set RTC interrupt to wake up after 15 minutes
-    badger.pcf85063a->set_timer(15, PCF85063A::TIMER_TICK_1_OVER_60HZ);
-    badger.pcf85063a->enable_timer_interrupt(true);
+    // badger.pcf85063a->set_timer(15, PCF85063A::TIMER_TICK_1_OVER_60HZ);
+    badger.pcf85063a->enable_timer_interrupt(false);
 
     // Clear source of interrupt
     badger.pcf85063a->clear_timer_flag();
@@ -144,7 +143,7 @@ void ntp_callback(datetime_t *datetime, void *arg) {
     ntp_time_set = true;
 }
 
-static void render_current_screen(const char *message) {
+static void render_current_screen(const char *message, bool sleeping) {
 
     badger.graphics->set_pen(15);
     badger.graphics->clear();
@@ -160,10 +159,9 @@ static void render_current_screen(const char *message) {
     }
 
     // Always draw status bar last so it overlays all other UI elements.
-    draw_status_bar(badger, message);
+    draw_status_bar(badger, message, sleeping);
     badger.update();
     badger.uc8151->busy_wait();
-    DEBUG_PRINTF("render_current_screen (since boot): %ld us\n", (long)(to_us_since_boot(get_absolute_time())));
 }
 
 static void refresh_tile_status(TILE *tile) {
@@ -199,10 +197,9 @@ static void refresh_tile_status(TILE *tile) {
     restful_request(request);
 }
 
-static void refresh_visible_tiles() {
-    visible_refresh_active = true;
+static void refresh_visible_tiles(bool visible_refresh) {
+    visible_refresh_active = visible_refresh;
     visible_refresh_pending = 0;
-    visible_refresh_column = (uint8_t)tiles_get_column();
 
     char tiles_base_idx = tiles_get_base_idx();
     for (char i = 0; i < 3; i++) {
@@ -229,7 +226,7 @@ static void refresh_current_screen() {
     }
 }
 
-static void restore_tiles_screen() {
+static void restore_tiles_screen(bool visible_refresh) {
     current_screen = APP_SCREEN_TILES;
     active_tile = NULL;
     badger.graphics->set_pen(15);
@@ -238,7 +235,7 @@ static void restore_tiles_screen() {
     if (!wifi_up()) {
         wifi_wait();
     }
-    refresh_visible_tiles();
+    refresh_visible_tiles(visible_refresh);
 }
 
 static void request_tile_mode(TILE *tile) {
@@ -509,25 +506,16 @@ void restful_callback(void *result, int status_code, void *arg) {
         }
     }
 
-    if (visible_refresh_active) {
-        if (visible_refresh_pending > 0) {
-            visible_refresh_pending--;
-        }
-        if (visible_refresh_pending == 0) {
-            if (current_screen == APP_SCREEN_TILES && tiles_get_column() == visible_refresh_column) {
-                render_current_screen(NULL);
-            }
-            visible_refresh_active = false;
-        }
-        restful_free_request(request);
-        return;
+    if (visible_refresh_pending > 0) {
+        visible_refresh_pending--;
     }
 
-    if (tile && tile->type == TILE_TYPE_RESTFUL && current_screen == APP_SCREEN_TILES && active_tile == tile) {
+    if (visible_refresh_pending == 0 && visible_refresh_active && current_screen == APP_SCREEN_TILES) {
+        visible_refresh_active = false;
         render_current_screen(NULL);
-    }
-
-    if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
+    } else if (tile && tile->type == TILE_TYPE_RESTFUL && current_screen == APP_SCREEN_TILES && active_tile == tile) {
+        render_current_screen(NULL);
+    } else if (current_screen == APP_SCREEN_DETAIL && active_tile == tile) {
         render_current_screen(NULL);
     }
 
@@ -713,13 +701,13 @@ void wifi_wait() {
     bool led = true;
     while(!wifi_up()) {
         if (halt_initiated) {
-            deinit("SLEEPING");
+            deinit(NULL);
         }
         if (attempts > WIFI_CONNECT_ATTEMPTS) {
             deinit("NO WIFI");
         }
         // Retry wifi connect if link status is in error
-        if ((sw_timer == 0 || (to_ms_since_boot(get_absolute_time()) - sw_timer) > WIFI_STATUS_POLL_MS) && cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA) <= 0) {
+        if ((sw_timer == 0 || (to_ms_since_boot(get_absolute_time()) - sw_timer) > WIFI_STATUS_POLL_MS) && !wifi_up()) {
             wifi_connect_async();
             sw_timer = to_ms_since_boot(get_absolute_time());
             attempts++;
@@ -771,16 +759,14 @@ int wait_for_button_press_release() {
     uint32_t sw_timer = to_ms_since_boot(get_absolute_time());
     int counter = 0;
     while (true) {
-        http_activity_wait_led();
         // Wait for button press
         while(!(gpio_get_all() & mask)) {
-            http_activity_wait_led();
             if (get_bootsel_button()) {
                 return -1;
             }
             // timer callback has asked for a halt
             if (halt_initiated) {
-                deinit("SLEEPING");
+                deinit(NULL);
             }
             // Allow a grace period before returning to record subsequent clicks
             if (counter > 0 && (to_ms_since_boot(get_absolute_time()) - sw_timer) > MULTI_CLICK_WAIT_MS) {
@@ -799,6 +785,7 @@ int wait_for_button_press_release() {
 
         badger.led(255);
         sleep_ms(80);    // debounce
+        http_activity_wait_led();
     }
 }
 
@@ -815,15 +802,14 @@ void tiles_init() {
 
 void init() {
     badger.init();
-    badger.led(255);
-
+    badger.led(0);
 
     adc_init();
     rtc_init();
 
     if (cyw43_arch_init()) {
         DEBUG_PRINTF("failed to initialise\n");
-        deinit();
+        deinit("NO WIFI");
     }
     cyw43_arch_enable_sta_mode();
 
@@ -852,7 +838,7 @@ void init() {
 
         // If we were woken by the RTC alarm, just go back to sleep
         if (badger.pressed_to_wake(badger.RTC)) {
-            deinit("SLEEPING");
+            deinit(NULL);
         }
         
         // Set the external RTC free byte so we can later determine if it has been initalized
@@ -871,12 +857,14 @@ void deinit(const char *message) {
     }
 
     DEBUG_PRINTF("Going to sleep zZzZ\n");
-    if (message && !badger.pressed_to_wake(badger.RTC)) {
-        restore_tiles_screen();
-        while(visible_refresh_active) {
-            tight_loop_contents();
-        }
+
+    // Return to tiles screen, update status(s) and render to e-ink one last time before going to sleep
+    restore_tiles_screen(false);
+    while(visible_refresh_pending > 0) {
+        tight_loop_contents();
     }
+    render_current_screen(message, true); 
+
     if(initialised) {
         cyw43_arch_deinit();
     }
@@ -910,8 +898,8 @@ int main() {
     alarm_id_t halt_timeout_id = -1;
     while(true) {
         halt_timeout_id = rearm_halt_timeout(halt_timeout_id);
-
         
+
         // Wait for button press
         int click_count = wait_for_button_press_release();
 
@@ -921,9 +909,10 @@ int main() {
             continue;
         }
 
-        if (visible_refresh_active) {
+        if (visible_refresh_pending > 0) {
             continue;
         }
+        
 
         // Check BOOTSEL button
         if (click_count == -1) {

@@ -1,23 +1,26 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
         {
             "name": "Pico Debug",
-            "type":"cortex-debug",
+            "type": "cortex-debug",
+            "request": "launch",
             "cwd": "${workspaceRoot}",
             "executable": "${command:cmake.launchTargetPath}",
-            "request": "launch",
-            "servertype": "external",
-            "gdbPath" : "gdb-multiarch",
-            "gdbTarget": "auxpi.int:3333",
+            "servertype": "openocd",
+            "gdbPath": "gdb-multiarch",
+            "device": "RP2040",
+            "configFiles": [
+                "interface/cmsis-dap.cfg",
+                "target/rp2040.cfg"
+            ],
             "svdFile": "${env:PICO_SDK_PATH}/src/rp2040/hardware_regs/rp2040.svd",
-            "runToMain": true,
-            // Work around for stopping at main on restart
-            "postRestartCommands": [
-                "break main",
-                "continue"
-            ]
+            "runToEntryPoint": "main",
+            // Fix for timer halt - https://github.com/raspberrypi/debugprobe/issues/45#issuecomment-2053731076
+            "openOCDPreConfigLaunchCommands": [
+                "set USE_CORE 0",
+                "adapter speed 5000"
+            ],
         }
     ]
 }
