@@ -167,6 +167,11 @@ static void http_activity_wait_led() {
         return;
     }
 
+    if ((now - request_start_timer) < 300) {
+        badger.led(255);
+        return;
+    }
+
     if (led_timer == 0 || (now - led_timer) > 100) {
         badger.led(led ? 255 : 0);
         led = !led;
