@@ -50,22 +50,21 @@ typedef struct TCP_CLIENT_T_ {
     const char *method;
     const char *endpoint;
     const char *json_body;
-    HTTP_REQUEST_TYPE request_type;
-    HTTP_REQUEST_RESULT temperature_result;
     http_callback_t callback;
     void *arg;
-    const char *extract_key;
+    const char **keys;
+    size_t keys_count;
 } TCP_CLIENT_T;
 
 static uint8_t active_request_count = 0;
 
-static void http_request_begin(void) {
+void http_request_begin(void) {
     if (active_request_count < UINT8_MAX) {
         active_request_count++;
     }
 }
 
-static void http_request_end(void) {
+void http_request_end(void) {
     if (active_request_count > 0) {
         active_request_count--;
     }
@@ -75,7 +74,7 @@ uint8_t http_active_request_count(void) {
     return active_request_count;
 }
 
-static bool http_extract_simple_value(const char *message_body, const char *key, char *value, int value_len) {
+static bool http_extract_simple_value(const char *message_body, const char *key, char *value, size_t value_len) {
     if (!message_body || !key || !value || value_len <= 0) {
         return false;
     }
@@ -113,86 +112,44 @@ static bool http_extract_simple_value(const char *message_body, const char *key,
  */
 static void http_process_buffer(void *arg) {
     TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-    memset(&state->temperature_result, 0, sizeof(state->temperature_result));
+    int response_code = 0;
 
     // Process HTTP response body, example: "HTTP/1.1 200 OK\r\n"
     char *message_body = strstr((char *)state->buffer, " ");
-    if (message_body == NULL) {
-        state->callback(NULL, 0, state->arg);
-        return;
-    }
+    if (message_body != NULL) {
+        // Move past deliminater and convert to number
+        response_code = atoi(++message_body);
 
-    // Move past deliminater and convert to number
-    int response_code = atoi(++message_body);
+        // Return if no header present to indicate JSON content
+        if (strstr(message_body, "Content-Type: application/json") != NULL) {
 
-    // For non-temperature request types, just return the response code
-    if (state->request_type != REQUEST_TYPE_BOILER && state->request_type != REQUEST_TYPE_RADIATOR && state->request_type != REQUEST_TYPE_RADIATOR_BATTERY && state->request_type != REQUEST_TYPE_BOILER_SCHEDULE && state->request_type != REQUEST_TYPE_RESTFUL) {
-        state->callback(NULL, response_code, state->arg);
-        return;
+            // Seek to last occurrence of newline, which should contain JSON string
+            message_body = strrchr(message_body, '\n');
+            if (message_body == NULL) {
+                response_code = 0;
+            }
+            message_body++;
+        }
     }
-
-    // Return if no header present to indicate JSON content
-    if (strstr(message_body, "Content-Type: application/json") == NULL) {
-        state->callback(NULL, response_code, state->arg);
-        return;
-    }
-
-    // Seek to last occurrence of newline, which should contain JSON string
-    message_body = strrchr(message_body, '\n');
-    if (message_body == NULL) {
-        state->callback(NULL, response_code, state->arg);
-        return;
-    }
-    message_body++;
     
     DEBUG_PRINTF("http_message_body_parse message_body: %s\n", message_body);
 
-    if (state->request_type == REQUEST_TYPE_RESTFUL) {
-        if (state->extract_key && state->extract_key[0]) {
-            if (!http_extract_simple_value(message_body, state->extract_key, state->temperature_result.value, sizeof(state->temperature_result.value))) {
-                state->callback(NULL, response_code, state->arg);
-                return;
-            }
-            DEBUG_PRINTF("http_message_body_parse restful value=%s\n", state->temperature_result.value);
+    if (state->keys_count == 0) {
+        if (state->callback) {
+            state->callback(NULL, NULL, response_code, state->arg);
         }
-        state->callback(&state->temperature_result, response_code, state->arg);
         return;
     }
 
-    if (state->request_type == REQUEST_TYPE_RADIATOR_BATTERY) {
-        if (!http_extract_simple_value(message_body, "value", state->temperature_result.battery, sizeof(state->temperature_result.battery))) {
-            state->callback(NULL, response_code, state->arg);
-            return;
+    for (size_t i = 0; i < state->keys_count; i++) {
+        const char *key = state->keys[i];
+        char value[64];
+        if (response_code == 200 && message_body && http_extract_simple_value(message_body, key, value, sizeof(value))) {
+            state->callback((char *)key, value, response_code, state->arg);
+        } else if (state->callback) {
+            state->callback((char *)key, NULL, response_code, state->arg);
         }
-        DEBUG_PRINTF("http_message_body_parse battery=%s\n", state->temperature_result.battery);
-        state->callback(&state->temperature_result, response_code, state->arg);
-        return;
     }
-
-    if (state->request_type == REQUEST_TYPE_BOILER_SCHEDULE) {
-        if (!http_extract_simple_value(message_body, "schedule", state->temperature_result.schedule, sizeof(state->temperature_result.schedule))) {
-            state->callback(NULL, response_code, state->arg);
-            return;
-        }
-        DEBUG_PRINTF("http_message_body_parse schedule=%s\n", state->temperature_result.schedule);
-        state->callback(&state->temperature_result, response_code, state->arg);
-        return;
-    }
-
-    // Extract current, target and mode values
-    if (!http_extract_simple_value(message_body, "current", state->temperature_result.current, sizeof(state->temperature_result.current)) ||
-        !http_extract_simple_value(message_body, "target", state->temperature_result.target, sizeof(state->temperature_result.target)) ||
-        !http_extract_simple_value(message_body, "mode", state->temperature_result.mode, sizeof(state->temperature_result.mode))) {
-        state->callback(NULL, response_code, state->arg);
-        return;
-    }
-
-    // Optional boost timestamp (ISO8601), may be absent
-    if (!http_extract_simple_value(message_body, "boost", state->temperature_result.boost, sizeof(state->temperature_result.boost))) {
-        state->temperature_result.boost[0] = '\0';
-    }
-    DEBUG_PRINTF("http_message_body_parse current=%s target=%s mode=%s\n", state->temperature_result.current, state->temperature_result.target, state->temperature_result.mode);
-    state->callback(&state->temperature_result, response_code, state->arg);
 }
 
 static err_t tcp_client_close(void *arg) {
@@ -227,7 +184,6 @@ static err_t tcp_result(void *arg, int status) {
         DEBUG_PRINTF("success\n");
     } else {
         DEBUG_PRINTF("failed %d\n", status);
-        
     }
 
     err_t err = tcp_client_close(arg);
@@ -303,9 +259,6 @@ static void tcp_client_err(void *arg, err_t err) {
 
 err_t tcp_client_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-    if (!p) {
-        return tcp_result(arg, -1);
-    }
     if (p->tot_len > 0) {
         DEBUG_PRINTF("recv %d err %d\n", p->tot_len, err);
         for (struct pbuf *q = p; q != NULL; q = q->next) {
@@ -367,7 +320,7 @@ static void tcp_dns_found(const char *hostname, const ip_addr_t *ipaddr, void *a
 }
 
 // Perform initialisation with optional key extraction
-static TCP_CLIENT_T *tcp_client_init_with_key(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg, const char *extract_key) {
+static TCP_CLIENT_T *tcp_client_init_with_key(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg, const char **keys, size_t keys_count) {
     TCP_CLIENT_T *state = calloc(1, sizeof(TCP_CLIENT_T));
     if (!state) {
         DEBUG_PRINTF("failed to allocate state\n");
@@ -377,20 +330,15 @@ static TCP_CLIENT_T *tcp_client_init_with_key(const char *url, const char *endpo
     state->endpoint = endpoint;
     state->method = method;
     state->json_body = json_body;
-    state->request_type = request_type;
-    state->extract_key = extract_key;
-
+    state->keys = keys;
+    state->keys_count = keys_count;
     state->callback = callback;
     state->arg = arg;
     return state;
 }
 
-void http_request(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg) {
-    http_request_with_key(url, endpoint, method, json_body, request_type, callback, arg, NULL);
-}
-
-void http_request_with_key(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg, const char *extract_key) {
-    TCP_CLIENT_T *state = tcp_client_init_with_key(url, endpoint, method, json_body, request_type, callback, arg, extract_key);
+void http_request(const char *url, const char *endpoint, const char *method, const char *json_body, HTTP_REQUEST_TYPE request_type, http_callback_t callback, void *arg, const char **keys, size_t keys_count) {
+    TCP_CLIENT_T *state = tcp_client_init_with_key(url, endpoint, method, json_body, request_type, callback, arg, keys, keys_count);
     if (!state) {
         return;
     }

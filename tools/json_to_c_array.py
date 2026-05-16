@@ -77,11 +77,6 @@ def main():
         append_string(buffer, request.get("on_value", ""))
         append_string(buffer, request.get("off_value", ""))
 
-        mode_request = tile.get("mode_request", {"method": "", "endpoint": "", "json_body": ""})
-        append_string(buffer, mode_request["method"])
-        append_string(buffer, mode_request["endpoint"])
-        append_string(buffer, mode_request["json_body"])
-
         battery_request = tile.get("battery_request", {"method": "", "endpoint": "", "json_body": ""})
         append_string(buffer, battery_request["method"])
         append_string(buffer, battery_request["endpoint"])

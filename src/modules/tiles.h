@@ -13,7 +13,6 @@ typedef struct TILE_ {
     char *name;
     char *image;
     RESTFUL_REQUEST_DATA *action_request;
-    RESTFUL_REQUEST_DATA *mode_request;
     RESTFUL_REQUEST_DATA *status_request;
     RESTFUL_REQUEST_DATA *battery_request;
     RESTFUL_REQUEST_DATA *target_request;
@@ -25,7 +24,6 @@ typedef struct TILE_ {
     char *status_on_value;
     char *status_off_value;
     uint8_t type;
-    uint8_t mode;
     uint16_t target_temp;
     char *battery_value;
     char *boost_status_value;

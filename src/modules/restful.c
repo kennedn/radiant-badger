@@ -2,69 +2,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "badger.h"
 #include "http.h"
 #include "restful.h"
 #include "tiles.h"
-#include "badger.h"
 
-static void restful_status_after_battery_callback(void *result, int response_code, void *arg);
-static void restful_status_after_schedule_callback(void *result, int response_code, void *arg);
-static void restful_status_after_action_callback(void *result, int response_code, void *arg);
-static const char *restful_resolve_json_body(RESTFUL_REQUEST *request, RESTFUL_REQUEST_DATA *sub_request);
-
-void restful_callback(void *result, int response_code, void *arg) {
-    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
-    if (!request || !request->callback) {
-        return;
-    }
-    request->callback(result, response_code, request);
-}
-
-void restful_request(RESTFUL_REQUEST *request) {
+static RESTFUL_REQUEST_DATA *restful_stage_request(RESTFUL_REQUEST *request, uint8_t stage) {
     if (!request) {
-        return;
-    }
-    TILE *tile = (TILE *)request->tile;
-
-    if (tile && tile->type == TILE_TYPE_RESTFUL) {
-        if (request->action_request && request->status_request) {
-            http_request(request->base_url, request->action_request->endpoint, request->action_request->method, request->action_request->json_body, REQUEST_TYPE_RESTFUL, restful_status_after_action_callback, request);
-            return;
-        }
-
-        RESTFUL_REQUEST_DATA *sub_request = request->status_request ? request->status_request : request->action_request;
-        if (!sub_request) {
-            DEBUG_PRINTF("No requests present, nothing to do\n");
-            return;
-        }
-
-        const char *json_body = restful_resolve_json_body(request, sub_request);
-        http_request_with_key(request->base_url, sub_request->endpoint, sub_request->method, json_body, REQUEST_TYPE_RESTFUL, restful_callback, request, tile->status_key);
-        return;
+        return NULL;
     }
 
-    if (tile && tile->type == TILE_TYPE_BOILER && tile->schedule_status_request && request->status_request) {
-        http_request(request->base_url, tile->schedule_status_request->endpoint, tile->schedule_status_request->method, tile->schedule_status_request->json_body, REQUEST_TYPE_BOILER_SCHEDULE, restful_status_after_schedule_callback, request);
-        return;
-    }
-
-    if (tile && tile->type == TILE_TYPE_RADIATOR && request->battery_request && request->status_request) {
-        http_request(request->base_url, request->battery_request->endpoint, request->battery_request->method, request->battery_request->json_body, REQUEST_TYPE_RADIATOR_BATTERY, restful_status_after_battery_callback, request);
-        return;
-    }
-
-    RESTFUL_REQUEST_DATA *sub_request = request->status_request ? request->status_request : request->action_request;
-
-    if (sub_request == NULL) {
-        DEBUG_PRINTF("No requests present, nothing to do\n");
-        return;
-    }
-
-    if (tile && (tile->type == TILE_TYPE_BOILER || tile->type == TILE_TYPE_RADIATOR)) {
-        HTTP_REQUEST_TYPE req_type = (tile->type == TILE_TYPE_BOILER) ? REQUEST_TYPE_BOILER : REQUEST_TYPE_RADIATOR;
-        const char *json_body = restful_resolve_json_body(request, sub_request);
-        http_request(request->base_url, sub_request->endpoint, sub_request->method, json_body, req_type, restful_callback, request);
-        return;
+    switch (stage) {
+        case 0:
+            return request->action_request;
+        case 1:
+            return request->status_request;
+        case 2:
+            return request->battery_request;
+        default:
+            return NULL;
     }
 }
 
@@ -81,111 +37,72 @@ static const char *restful_resolve_json_body(RESTFUL_REQUEST *request, RESTFUL_R
     return sub_request->json_body;
 }
 
-static void restful_status_after_action_callback(void *result, int response_code, void *arg) {
-    (void)result;
-    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
-    if (!request) {
-        return;
+static bool restful_issue_stage(RESTFUL_REQUEST *request, uint8_t stage) {
+    RESTFUL_REQUEST_DATA *sub_request = restful_stage_request(request, stage);
+    if (!request || !sub_request) {
+        return false;
     }
 
-    TILE *tile = (TILE *)request->tile;
-    if (!tile || tile->type != TILE_TYPE_RESTFUL) {
-        return;
-    }
+    request->stage = stage;
+    request->active_request = sub_request;
+    request->keys_count = sub_request->keys_count;
+    request->keys_remaining = sub_request->keys_count;
 
-    // Now fetch the status with the key extraction
-    RESTFUL_REQUEST_DATA *sub_request = request->status_request;
-    if (!sub_request) {
-        if (request->callback) {
-            request->callback(NULL, response_code, request);
-        }
-        return;
-    }
-
-    // Use http_request_with_key to extract the status value based on tile's status_key
-    http_request_with_key(request->base_url, sub_request->endpoint, sub_request->method, sub_request->json_body, REQUEST_TYPE_RESTFUL, restful_callback, request, tile->status_key);
-}
-
-static void restful_status_after_battery_callback(void *result, int response_code, void *arg) {
-    (void)result;
-    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
-    if (!request) {
-        return;
-    }
-
-    TILE *tile = (TILE *)request->tile;
-    if (tile && tile->type == TILE_TYPE_RADIATOR) {
-        if (response_code == 200 && result) {
-            HTTP_REQUEST_RESULT *battery_result = (HTTP_REQUEST_RESULT *)result;
-            DEBUG_PRINTF("restful: battery result='%s' for tile=%s\n", battery_result->battery, tile->name);
-            free(tile->battery_value);
-            tile->battery_value = (char *)malloc(strlen(battery_result->battery) + 1);
-            strcpy(tile->battery_value, battery_result->battery);
-        } else {
-            free(tile->battery_value);
-            tile->battery_value = NULL;
-        }
-    }
-
-    RESTFUL_REQUEST_DATA *sub_request = request->status_request ? request->status_request : request->action_request;
-    if (!sub_request) {
-        if (request->callback) {
-            request->callback(NULL, response_code, request);
-        }
-        return;
-    }
-
-    HTTP_REQUEST_TYPE req_type = (tile && tile->type == TILE_TYPE_BOILER) ? REQUEST_TYPE_BOILER : REQUEST_TYPE_RADIATOR;
     const char *json_body = restful_resolve_json_body(request, sub_request);
-    http_request(request->base_url, sub_request->endpoint, sub_request->method, json_body, req_type, restful_callback, request);
+    http_request(request->base_url, sub_request->endpoint, sub_request->method, json_body, REQUEST_TYPE_RESTFUL, request->callback, request, (const char **)sub_request->keys, sub_request->keys_count);
+    return true;
 }
 
-static void restful_status_after_schedule_callback(void *result, int response_code, void *arg) {
-    (void)result;
-    RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)arg;
+void restful_request(RESTFUL_REQUEST *request) {
     if (!request) {
         return;
     }
 
-    TILE *tile = (TILE *)request->tile;
-    if (tile && tile->type == TILE_TYPE_BOILER) {
-        if (response_code == 200 && result) {
-            HTTP_REQUEST_RESULT *schedule_result = (HTTP_REQUEST_RESULT *)result;
-            DEBUG_PRINTF("restful: schedule result='%s' for tile=%s\n", schedule_result->schedule, tile->name);
-            free(tile->schedule_status_value);
-            tile->schedule_status_value = (char *)malloc(strlen(schedule_result->schedule) + 1);
-            strcpy(tile->schedule_status_value, schedule_result->schedule);
-        } else {
-            free(tile->schedule_status_value);
-            tile->schedule_status_value = NULL;
-        }
-    }
-
-    RESTFUL_REQUEST_DATA *sub_request = request->status_request ? request->status_request : request->action_request;
-    if (!sub_request) {
-        if (request->callback) {
-            request->callback(NULL, response_code, request);
-        }
-        return;
-    }
-
-    HTTP_REQUEST_TYPE req_type = REQUEST_TYPE_BOILER;
-    const char *json_body = restful_resolve_json_body(request, sub_request);
-    http_request(request->base_url, sub_request->endpoint, sub_request->method, json_body, req_type, restful_callback, request);
+    request->stage = 0;
+    request->active_request = NULL;
+    request->keys_count = 0;
+    request->keys_remaining = 0;
+    restful_request_continue(request);
 }
 
-RESTFUL_REQUEST *restful_make_request(void *tile, const char *base_url, RESTFUL_REQUEST_DATA *action_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, int template_value, restful_callback_t callback) {
-    if (!base_url || !callback || (!action_request && !status_request)) {
+bool restful_request_continue(RESTFUL_REQUEST *request) {
+    if (!request) {
+        return false;
+    }
+
+    uint8_t next_stage = request->active_request ? (uint8_t)(request->stage + 1) : request->stage;
+    while (next_stage < 3) {
+        if (restful_issue_stage(request, next_stage)) {
+            return true;
+        }
+        next_stage++;
+    }
+
+    request->active_request = NULL;
+    request->keys_count = 0;
+    request->keys_remaining = 0;
+    return false;
+}
+
+RESTFUL_REQUEST *restful_make_request(void *tile, const char *base_url, RESTFUL_REQUEST_DATA *action_request, RESTFUL_REQUEST_DATA *status_request, RESTFUL_REQUEST_DATA *battery_request, int template_value, http_callback_t callback) {
+    if (!base_url || !callback || (!action_request && !status_request && !battery_request)) {
         DEBUG_PRINTF("Required data in request was NULL\n");
         return NULL;
     }
+
     RESTFUL_REQUEST *request = (RESTFUL_REQUEST *)malloc(sizeof(RESTFUL_REQUEST));
     request->tile = tile;
-    request->base_url = (char*) malloc(strlen(base_url) + 1 * sizeof(char));
+    request->base_url = (char *)malloc(strlen(base_url) + 1);
     strcpy(request->base_url, base_url);
     request->action_request = action_request;
     request->status_request = status_request;
     request->battery_request = battery_request;
+    request->active_request = NULL;
+    request->keys_count = 0;
+    request->keys_remaining = 0;
+    request->visible_refresh_batch = false;
+    request->visible_refresh_generation = 0;
+    request->stage = 0;
     request->template_value = template_value;
     request->resolved_json_body[0] = '\0';
     request->callback = callback;
@@ -197,6 +114,7 @@ void restful_free_request(RESTFUL_REQUEST *request) {
     if (!request) {
         return;
     }
+
     free(request->base_url);
     free(request);
 }
@@ -205,18 +123,22 @@ RESTFUL_REQUEST_DATA *restful_make_request_data(char *method, char *endpoint, ch
     if (!method || !endpoint || !json_body || !method[0] || !endpoint[0] || !json_body[0]) {
         return NULL;
     }
+
     RESTFUL_REQUEST_DATA *request_data = (RESTFUL_REQUEST_DATA *)malloc(sizeof(RESTFUL_REQUEST_DATA));
     request_data->method = method;
     request_data->endpoint = endpoint;
     request_data->json_body = json_body;
+    request_data->keys = NULL;
+    request_data->keys_count = 0;
 
     return request_data;
- }
+}
 
 void restful_free_request_data(RESTFUL_REQUEST_DATA *request) {
     if (!request) {
         return;
     }
+
     free(request->method);
     free(request->endpoint);
     free(request->json_body);

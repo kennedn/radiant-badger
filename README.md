@@ -96,7 +96,6 @@ The file contains an array of columns. Each column contains up to 3 tiles (`tile
 | type | number | 0 = BOILER |
 | image_idx | number | Index of icon to display |
 | status_request | object | HTTP request to fetch current tile status |
-| mode_request | object | Optional HTTP request to change mode |
 | target_request | object | Optional HTTP request to change target temp |
 | schedule_request | object | Optional HTTP request to change schedule |
 | schedule_status_request | object | Optional HTTP request to fetch schedule |
@@ -109,7 +108,6 @@ The file contains an array of columns. Each column contains up to 3 tiles (`tile
 | type | number | 1 = RADIATOR |
 | image_idx | number | Index of icon to display |
 | status_request | object | HTTP request to fetch current tile status |
-| mode_request | object | Optional HTTP request to change mode |
 | battery_request | object | Optional HTTP request to fetch battery status |
 | boost_request | object | Optional HTTP request to set boost |
 
@@ -148,11 +146,6 @@ The file contains an array of columns. Each column contains up to 3 tiles (`tile
             "method": "POST",
             "endpoint": "/v2/thermostat",
             "json_body": "{\"code\": \"status\"}"
-        },
-        "mode_request": {
-            "method": "POST",
-            "endpoint": "/v2/thermostat",
-            "json_body": "{\"code\": \"mode\",\"value\":\"%d\"}"
         },
         "target_request": {
             "method": "POST",
