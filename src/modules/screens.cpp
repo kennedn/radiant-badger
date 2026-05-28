@@ -110,6 +110,9 @@ void draw_status_bar(pimoroni::Badger2040W &badger, const char *title, bool slee
 }
 
 void draw_tiles(pimoroni::Badger2040W &badger, const char *selected_name, const char *indicator_icon) {
+    if (!tile_array) {
+        return;
+    }
     char tiles_base_idx = tiles_get_base_idx();
     char tile_pad_x = WIDTH / 3;
     char tile_pad_y = 25 + 4;

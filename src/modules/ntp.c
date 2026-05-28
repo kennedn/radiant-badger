@@ -24,29 +24,21 @@ typedef struct NTP_T_ {
 #define NTP_DELTA 2208988800  // seconds between 1 Jan 1900 and 1 Jan 1970
 #define NTP_FAILURE_TIME (5 * 1000)
 
-// static bool ntp_convert_epoch(const time_t *epoch, datetime_t *datetime) {
-//     struct tm *timeinfo = gmtime(epoch);
-//     if (timeinfo == NULL) {
-//         return false;
-//     }
-//     tm_to_datetime(timeinfo, datetime);
-//     datetime->year = timeinfo->tm_year + 1900;
-//     datetime->month = timeinfo->tm_mon + 1;
-//     datetime->day = timeinfo->tm_mday;
-//     datetime->dotw = timeinfo->tm_wday;
-//     datetime->hour = timeinfo->tm_hour;
-//     datetime->min = timeinfo->tm_min;
-//     datetime->sec = timeinfo->tm_sec;
-
-
-//     return true;
-// }
 
 // Called with results of operation
 static void ntp_result(NTP_T *state, int status, time_t *result) {
+    if (!state) {
+        return;
+    }
+
     if (state->ntp_failure_alarm > 0) {
         cancel_alarm(state->ntp_failure_alarm);
         state->ntp_failure_alarm = 0;
+    }
+
+    if (state->ntp_pcb) {
+        udp_remove(state->ntp_pcb);
+        state->ntp_pcb = NULL;
     }
 
     if (status == 0 && result) {
@@ -143,8 +135,13 @@ void ntp_get_time(ntp_callback_t callback, void *arg) {
     setenv("TZ", TZ, 1);
     tzset();
     NTP_T *state = ntp_init(callback, arg);
-    if (!state)
+    if (!state) {
+        // Always notify callers on failure so higher-level code does not block forever.
+        if (callback) {
+            callback(NULL, arg);
+        }
         return;
+    }
 
     // Set alarm in case udp request is lost
     state->ntp_failure_alarm = add_alarm_in_ms(NTP_FAILURE_TIME, ntp_failed_handler, state, true);

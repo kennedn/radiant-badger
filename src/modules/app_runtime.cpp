@@ -69,7 +69,7 @@ void app_render_current_screen(const char *message, bool sleeping) {
 }
 
 static void refresh_tile_status(TILE *tile) {
-    if (!tile || !tile->status_request) {
+    if (!tile || !tile->status_request || !tile_array) {
         return;
     }
 
@@ -97,7 +97,7 @@ void app_refresh_visible_tiles(bool visible_refresh) {
 
     char tiles_base_idx = tiles_get_base_idx();
     for (char i = 0; i < 3; i++) {
-        if (!tiles_idx_in_bounds(tiles_base_idx + i)) {
+        if (!tile_array || !tiles_idx_in_bounds(tiles_base_idx + i)) {
             break;
         }
         TILE *tile = tile_array->tiles[tiles_base_idx + i];
@@ -139,7 +139,7 @@ void app_restore_tiles_screen(bool visible_refresh) {
 }
 
 void app_request_boiler_target_toggle(TILE *tile) {
-    if (!tile || tile->type != TILE_TYPE_BOILER || !tile->target_request) {
+    if (!tile_array || !tile || tile->type != TILE_TYPE_BOILER || !tile->target_request) {
         return;
     }
 
@@ -176,7 +176,7 @@ void app_request_tile_schedule_edit(TILE *tile) {
 }
 
 void app_request_tile_boost_submit(TILE *tile) {
-    if (!tile || tile->type != TILE_TYPE_RADIATOR || !tile->boost_request) {
+    if (!tile_array || !tile || tile->type != TILE_TYPE_RADIATOR || !tile->boost_request) {
         return;
     }
 
@@ -192,7 +192,7 @@ void app_request_tile_boost_submit(TILE *tile) {
 }
 
 void app_request_tile_schedule_submit(TILE *tile) {
-    if (!tile || tile->type != TILE_TYPE_BOILER || !tile->schedule_request) {
+    if (!tile_array || !tile || tile->type != TILE_TYPE_BOILER || !tile->schedule_request) {
         return;
     }
 
@@ -233,7 +233,7 @@ void app_request_tile_schedule_submit(TILE *tile) {
 }
 
 void app_refresh_tile_detail(TILE *tile) {
-    if (!tile) {
+    if (!tile_array || !tile) {
         return;
     }
 
@@ -340,7 +340,7 @@ static void finalize_restful_request(RESTFUL_REQUEST *request) {
 }
 
 void app_restful_callback(char *key, char *value, int status_code, void *arg) {
-    if (arg == NULL) {
+    if (arg == NULL || !app_is_initialised()) {
         return;
     }
 

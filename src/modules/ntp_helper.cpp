@@ -29,9 +29,20 @@ static bool datetime_is_sane(datetime_t *datetime) {
     return true;
 }
 
+static bool ntp_rtc_set_datetime() {
+    datetime_t datetime = badger.pcf85063a->get_datetime();
+    if (!datetime_is_sane(&datetime)) {
+        return false;
+    }
+    rtc_set_datetime(&datetime);
+    return true;
+}
+
 static void ntp_callback(datetime_t *datetime, void *arg) {
     (void)arg;
     if (datetime == NULL) {
+        DEBUG_PRINTF("Failed to get time from NTP, attempting to fallback to RTC\n");
+        ntp_rtc_set_datetime();
         ntp_time_set = true;
         return;
     }
@@ -67,12 +78,8 @@ void ntp_helper_retrieve_time(bool from_ntp) {
     }
 
     DEBUG_PRINTF("Retrieving time from RTC\n");
-    datetime_t datetime = badger.pcf85063a->get_datetime();
-    if (!datetime_is_sane(&datetime)) {
-        DEBUG_PRINTF("RTC time is insane, triggering NTP retrieval\n");
+    if (!ntp_rtc_set_datetime()) {
+        DEBUG_PRINTF("Failed to get time from RTC, triggering NTP retrieval\n");
         ntp_helper_retrieve_time(true);
-        return;
     }
-
-    rtc_set_datetime(&datetime);
 }

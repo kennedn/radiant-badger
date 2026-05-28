@@ -71,13 +71,6 @@ bool __no_inline_not_in_flash_func(get_bootsel_button)() {
     return button_state;
 }
 
-// 1 minute alarm
-datetime_t ntp_alarm = datetime_t{
-    .day = -1,
-    .hour = -1,
-    .min = 15,
-    .sec = 00};
-
 int request_buttons[] = {badger.A, badger.B, badger.C};
 
 static volatile bool halt_initiated = false;
@@ -274,6 +267,7 @@ void init() {
     } else {
         ntp_helper_retrieve_time(false);
     }
+    
 }
 
 void deinit(const char *message) {
@@ -295,11 +289,8 @@ void deinit(const char *message) {
             tight_loop_contents();
         }
     }
-
-    if(app_is_initialised()) {
-        cyw43_arch_deinit();
-    }
-    
+    app_set_initialised(false);
+    cyw43_arch_deinit();
     tiles_free();
     ntp_helper_rearm_rtc_timer();
     badger.led(0);
@@ -383,7 +374,7 @@ int main() {
                 if (!badger.pressed(request_buttons[i])) {
                     continue;
                 }
-                if (tiles_idx_in_bounds(tiles_base_idx + i)) {
+                if (tile_array && tiles_idx_in_bounds(tiles_base_idx + i)) {
                     tile = tile_array->tiles[tiles_base_idx + i];
                 }
             }
